@@ -1,0 +1,3 @@
+default	The default R graphics demo, for the Cairo device
+lattice	Demo for the lattice package, Cairo style
+embedded	Simple embedded plot in a GtkWindow
