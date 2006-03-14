@@ -7,7 +7,7 @@ static PangoStyle  slant[]  = { PANGO_STYLE_NORMAL, PANGO_STYLE_OBLIQUE };
 static PangoWeight weight[] = { PANGO_WEIGHT_NORMAL, PANGO_WEIGHT_BOLD };
 
 CairoDesc *createCairoDesc() {
-	g_new0(CairoDesc, 1);
+	return(g_new0(CairoDesc, 1));
 }
 void freeCairoDesc(CairoDesc *cd) {
 	if(cd->window)
@@ -226,9 +226,9 @@ static PangoFontDescription *getFont(CairoDesc *cd, R_GE_gcontext *gc)
 
 static PangoLayout *layoutText(PangoFontDescription *desc, const char *str, CairoDesc *cd)
 {
-	gsize bytes_written;
-    gchar *utf8;
 	PangoLayout *layout;
+    	char *utf8;
+    	gsize bytes_written;
 	
 	//pango_cairo_update_context(cd->cr, cd->pango);
 	//layout = pango_layout_new(cd->pango);
@@ -248,8 +248,6 @@ text_extents(PangoFontDescription *desc, CairoDesc *cd, const gchar *text,
 {
 	PangoLayout *layout;
     PangoRectangle rect;
-    char *utf8;
-    gsize bytes_written;
 	
 	layout = layoutText(desc, text, cd);
 	pango_layout_line_get_pixel_extents(pango_layout_get_line(layout, 0), NULL, &rect);
@@ -274,7 +272,7 @@ static void font_metrics(PangoFontDescription *desc, CairoDesc *cd,
 	PangoFontMetrics *metrics;
 
 	metrics = pango_context_get_metrics(gtk_widget_get_pango_context(cd->drawing), 
-					desc, pango_language_from_string(setlocale(LC_MESSAGES, NULL)));
+					desc, NULL);
 	
 	*ascent = PANGO_PIXELS(pango_font_metrics_get_ascent(metrics));
     *descent = PANGO_PIXELS(pango_font_metrics_get_descent(metrics));
@@ -292,8 +290,8 @@ static void setColor(cairo_t *cr, int color)
 /* set the line type */
 static void setLineType(cairo_t *cr, R_GE_gcontext *gc)
 {
-    cairo_line_cap_t cap;
-	cairo_line_join_t join;
+    cairo_line_cap_t cap = CAIRO_LINE_CAP_ROUND;
+	cairo_line_join_t join = CAIRO_LINE_JOIN_ROUND;
 	static double dashes[8];
 	gint i;
 	
@@ -361,7 +359,6 @@ static void drawRect(cairo_t *cr, double x0, double y0, double x1, double y1,
 static double Cairo_StrWidth(char *str, R_GE_gcontext *gc, NewDevDesc *dd)
 {
     gint width;
-	PangoLayout *layout;
     CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
 	PangoFontDescription *desc = getFont(cd, gc);
@@ -824,13 +821,14 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
 		return FALSE;
     }
 	
-	configureCairoDevice(dd, cd, width, height, ps);
+	return(configureCairoDevice(dd, cd, width, height, ps));
 }
 Rboolean
 asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data)
 {
 	GtkWidget *drawing = GTK_WIDGET(data);
 	CairoDesc *cd;
+	gdouble w = width, h = height;
 
 	if(!(cd = createCairoDesc()))
 		return FALSE;
@@ -840,10 +838,10 @@ asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data
 		return FALSE;
     }
 	
-	width = drawing->allocation.width * pixelWidth();
-	height = drawing->allocation.height * pixelHeight();
+	w = drawing->allocation.width * pixelWidth();
+	h = drawing->allocation.height * pixelHeight();
 	
-	configureCairoDevice(dd, cd, width, height, ps);
+	return(configureCairoDevice(dd, cd, w, h, ps));
 }
 
 typedef Rboolean (*CairoDeviceCreateFun)(NewDevDesc *, double width, 
@@ -905,7 +903,7 @@ SEXP
 do_asCairoDevice(SEXP widget, SEXP pointsize)
 {
     GtkWidget *drawing = GTK_WIDGET(R_ExternalPtrAddr(widget));
-    double width, height, ps;
+    double ps;
     SEXP ans = Rf_allocVector(LGLSXP, 1);
 
     ps = REAL(pointsize)[0];

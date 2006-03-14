@@ -3,6 +3,8 @@
 #ifndef WIN32
 #include "R_ext/eventloop.h"
 #include <gdk/gdkx.h>
+#else
+extern __declspec(dllimport) void (* R_tcldo)();
 #endif
 
 void
@@ -15,10 +17,14 @@ R_gtk_eventHandler(void *userData)
 void
 R_gtk_setEventHandler()
 {
+    #ifndef WIN32
     static InputHandler *h = NULL;
     if(!h)
 	h = addInputHandler(R_InputHandlers, ConnectionNumber(GDK_DISPLAY()),
 			    R_gtk_eventHandler, -1);
+    #else
+    R_tcldo = R_gtk_eventHandler;
+    #endif
 }
 
 /**
