@@ -1,6 +1,6 @@
 Package: cairoDevice
-Version: 0.1-0
-Date:    2005/8/18
+Version: 1.0.0
+Date:    2006/4/2
 Title: Loadable cairo device driver for R
 Author:  Michael Lawrence, Lyndon Drake
 Depends: R (>= 1.9.0)
