@@ -9,8 +9,8 @@ asCairoDevice <- function(widget, pointsize = 10)
 {
     if (!require("RGtk2"))
        stop("asGtkDevice requires the RGtk package")
-    if(!inherits(widget, "GtkDrawingArea")) {
-        stop("Widget being used as a Cairo Device must be a GtkDrawingArea")
+    if(!inherits(widget, "GtkDrawingArea") && !inherits(widget, "GdkDrawable")) {
+        stop("Object being used as a Cairo Device must be a GtkDrawingArea or GdkDrawable")
     }
 
     .Call("do_asCairoDevice", widget, as.numeric(pointsize), PACKAGE="cairoDevice")

@@ -10,14 +10,14 @@ CairoDesc *createCairoDesc() {
 	return(g_new0(CairoDesc, 1));
 }
 void freeCairoDesc(CairoDesc *cd) {
+  if(cd->pixmap)
+		g_object_unref(cd->pixmap);
+  
 	if(cd->window)
 		gtk_widget_destroy(cd->window);
 
 	if(cd->cr)
 		cairo_destroy(cd->cr);
-	
-    if(cd->pixmap)
-		g_object_unref(cd->pixmap);
 	
 	g_free(cd);
 }
@@ -39,10 +39,16 @@ static double pixelHeight(void)
     return ((double)heightMM / (double)height) / MM_PER_INCH;
 }
 
+static PangoContext *getPangoContext(CairoDesc *cd)
+{
+  if (cd->drawing)
+    return(gtk_widget_get_pango_context(cd->drawing));
+  return(gdk_pango_context_get());
+}
+
 static PangoFont *loadFont(PangoFontDescription *fontdesc, CairoDesc *cd)
 {
-    return(pango_context_load_font(gtk_widget_get_pango_context(cd->drawing), 
-				fontdesc));
+  return(pango_context_load_font(getPangoContext(cd), fontdesc));
 }
 
 static PangoFontDescription *getBaseFont(CairoDesc *cd)
@@ -52,10 +58,13 @@ static PangoFontDescription *getBaseFont(CairoDesc *cd)
 
 static void blank(CairoDesc *cd) {
 	cairo_t *cr = cd->cr;
+  gint width, height;
+  gdk_drawable_get_size(cd->pixmap, &width, &height);
 	cairo_set_source_rgb(cr, 1, 1, 1);
-	cairo_rectangle(cr, 0, 0, cd->drawing->allocation.width, cd->drawing->allocation.height);
+	cairo_rectangle(cr, 0, 0, (gdouble)width, (gdouble)height);
 	cairo_fill(cr);
-	gtk_widget_queue_draw(cd->drawing);
+  if (cd->drawing)
+    gtk_widget_queue_draw(cd->drawing);
 }
 
 static gboolean initDisplay(NewDevDesc *dd)
@@ -66,34 +75,36 @@ static gboolean initDisplay(NewDevDesc *dd)
 	
 	cd = (CairoDesc *) dd->deviceSpecific;
 	
-	/* set up crosshair cursor */
-	cursor = gdk_cursor_new(GDK_CROSSHAIR);
-    gdk_window_set_cursor(cd->drawing->window, cursor);
-	gdk_cursor_unref(cursor);
-	
-	/* sync the size with the device */
-	Cairo_Size(&left, &right, &bottom, &top, dd);
-    
+  Cairo_Size(&left, &right, &bottom, &top, dd);
 	dd->left = left;
 	cd->width = dd->right = right;
 	cd->height = dd->bottom = bottom;
 	dd->top = top;
+  
+	/* set up crosshair cursor */
+	if (cd->drawing) {
+    cursor = gdk_cursor_new(GDK_CROSSHAIR);
+    gdk_window_set_cursor(cd->drawing->window, cursor);
+    gdk_cursor_unref(cursor);
+  }
 	
 	if(cd->cr)
 		cairo_destroy(cd->cr);
-	if(cd->pixmap)
-	    g_object_unref(cd->pixmap);
+	if(cd->pixmap && cd->drawing)
+	  g_object_unref(cd->pixmap);
 	
 	/* create pixmap and cairo context for drawing, save default state */
 	if(right > 0 && bottom > 0) {
-		cd->pixmap = gdk_pixmap_new(cd->drawing->window, right, bottom, -1);
-	    cd->cr = gdk_cairo_create(cd->pixmap);
+		if (cd->drawing)
+      cd->pixmap = gdk_pixmap_new(cd->drawing->window, right, bottom, -1);
+	  cd->cr = gdk_cairo_create(cd->pixmap);
 		//cd->pango = pango_cairo_font_map_create_context(
 		//				PANGO_CAIRO_FONT_MAP(pango_cairo_font_map_get_default()));
 		//pango_cairo_context_set_resolution(cd->pango, 84);
 		cairo_save(cd->cr);
+    /* sync the size with the device */
 	}
-	
+  
 	return FALSE;
 }
 
@@ -121,9 +132,9 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
     g_return_val_if_fail(GTK_IS_DRAWING_AREA(cd->drawing), FALSE);
 	
     if(cd->width != cd->drawing->allocation.width || cd->height != cd->drawing->allocation.height) 
-		resize(dd); 
-	else if(cd->pixmap) {
-		gdk_draw_drawable(cd->drawing->window, cd->drawing->style->bg_gc[GTK_STATE_NORMAL], 
+      resize(dd); 
+    else if(cd->pixmap) {
+      gdk_draw_drawable(cd->drawing->window, cd->drawing->style->bg_gc[GTK_STATE_NORMAL], 
 			   cd->pixmap,
 			   event->area.x, event->area.y,
 			   event->area.x, event->area.y,
@@ -158,19 +169,28 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *dra
 			 
 	return(TRUE);
 }
+static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *drawing)
+{
+	dd->deviceSpecific = cd;
+	cd->pixmap = drawing;
+  g_object_ref(G_OBJECT(cd->pixmap));
+	// initialize
+	initDisplay(dd);		 
+	return(TRUE);
+}
 
 static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h)
 {	
 	dd->deviceSpecific = cd;
 		
 	cd->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_resizable(GTK_WINDOW(cd->window), TRUE);
+  gtk_window_set_resizable(GTK_WINDOW(cd->window), TRUE);
 	gtk_window_set_default_size(GTK_WINDOW(cd->window), 
 		w / pixelWidth(), h / pixelHeight());
 
     /* create drawingarea */
-    cd->drawing = gtk_drawing_area_new();
-    gtk_widget_set_events(cd->drawing, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK);
+  cd->drawing = gtk_drawing_area_new();
+  gtk_widget_set_events(cd->drawing, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK);
 	
 	/* connect to signal handlers, etc */
 	g_signal_connect(G_OBJECT (cd->drawing), "realize",
@@ -180,9 +200,9 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h)
 	gtk_container_add(GTK_CONTAINER(cd->window), cd->drawing);
 	
 	/* connect to signal handlers, etc */
-    g_signal_connect(G_OBJECT(cd->drawing), "expose_event",
+  g_signal_connect(G_OBJECT(cd->drawing), "expose_event",
 		     G_CALLBACK(expose_event), dd);
-    g_signal_connect(G_OBJECT(cd->window), "delete_event",
+  g_signal_connect(G_OBJECT(cd->window), "delete_event",
 		     G_CALLBACK(delete_event), dd);
 	
 	gtk_widget_show_all(cd->window);
@@ -226,13 +246,15 @@ static PangoFontDescription *getFont(CairoDesc *cd, R_GE_gcontext *gc)
 
 static PangoLayout *layoutText(PangoFontDescription *desc, const char *str, CairoDesc *cd)
 {
+	gsize bytes_written;
+    gchar *utf8;
 	PangoLayout *layout;
-    	char *utf8;
-    	gsize bytes_written;
 	
 	//pango_cairo_update_context(cd->cr, cd->pango);
 	//layout = pango_layout_new(cd->pango);
-	layout = gtk_widget_create_pango_layout(cd->drawing, NULL);
+  if (cd->drawing)
+    layout = gtk_widget_create_pango_layout(cd->drawing, NULL);
+  else layout = pango_layout_new(gdk_pango_context_get());
 	pango_layout_set_font_description(layout, desc);
 	utf8 = g_locale_to_utf8(str, -1, NULL, &bytes_written, NULL);
     pango_layout_set_text(layout, utf8, -1);
@@ -270,9 +292,8 @@ static void font_metrics(PangoFontDescription *desc, CairoDesc *cd,
 				gint *width, gint *ascent, gint *descent)
 {
 	PangoFontMetrics *metrics;
-
-	metrics = pango_context_get_metrics(gtk_widget_get_pango_context(cd->drawing), 
-					desc, NULL);
+  
+  metrics = pango_context_get_metrics(getPangoContext(cd),	desc, NULL);
 	
 	*ascent = PANGO_PIXELS(pango_font_metrics_get_ascent(metrics));
     *descent = PANGO_PIXELS(pango_font_metrics_get_descent(metrics));
@@ -416,31 +437,38 @@ static void Cairo_Size(double *left, double *right, double *bottom, double *top,
 		     NewDevDesc *dd)
 {
     CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-
+    gint width = 0, height = 0;
+    GdkDrawable *drawable = cd->pixmap;
+    
+    if (!drawable)
+      drawable = cd->drawing->window;
+    
+    if (GDK_IS_DRAWABLE(drawable))
+      gdk_drawable_get_size(drawable, &width, &height);
+    
     *left = 0.0;
-    *right =  cd->drawing->allocation.width;
-    *bottom = cd->drawing->allocation.height;
+    *right = (gdouble)width;
     *top = 0.0;
+    *bottom = (gdouble)height;
 }
 
 /* clear the drawing area */
 static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd;
+  CairoDesc *cd;
+  gint width, height;
 	
-    g_return_if_fail(dd != NULL);
-    cd = (CairoDesc *) dd->deviceSpecific;
-    g_return_if_fail(cd != NULL);
+  g_return_if_fail(dd != NULL);
+  cd = (CairoDesc *) dd->deviceSpecific;
+  g_return_if_fail(cd != NULL);
 	g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-    g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
     
 	if (!R_OPAQUE(gc->fill)) {
 		blank(cd);
-    }
+  }
 	
-	drawRect(cd->cr, 0, 0, cd->drawing->allocation.width,
-		cd->drawing->allocation.height, gc);
+  gdk_drawable_get_size(cd->pixmap, &width, &height);
+	drawRect(cd->cr, 0, 0, width, height, gc);
 }
 
 /** kill off the window etc
@@ -494,13 +522,11 @@ static void Cairo_Deactivate(NewDevDesc *dd)
 static void Cairo_Rect(double x0, double y0, double x1, double y1,
 		     R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
-    g_return_if_fail(cd != NULL);
-    g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-	g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
-	
+  g_return_if_fail(cd != NULL);
+  g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
+
 	cairo_save(cd->cr);
 	drawRect(cd->cr, x0, y0, x1, y1, gc);
 	cairo_restore(cd->cr);
@@ -515,12 +541,10 @@ static void drawCircle(cairo_t *cr, double x, double y, double r, R_GE_gcontext 
 static void Cairo_Circle(double x, double y, double r,
 		       R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 
 	g_return_if_fail(cd != NULL);
-    g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-	g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
+  g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
 
 	cairo_save(cd->cr);
 	drawCircle(cd->cr, x, y, r, gc);
@@ -541,12 +565,10 @@ static void drawLine(cairo_t *cr, double x1, double y1, double x2, double y2,
 static void Cairo_Line(double x1, double y1, double x2, double y2,
 		     R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 
-    g_return_if_fail(cd != NULL);
-    g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-	g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
+  g_return_if_fail(cd != NULL);
+  g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
 
 	cairo_save(cd->cr);
 	drawLine(cd->cr, x1, y1, x2, y2, gc);
@@ -573,12 +595,10 @@ static void drawPolyline(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext
 static void Cairo_Polyline(int n, double *x, double *y, 
 			 R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
-    g_return_if_fail(cd != NULL);
-    g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-	g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
+  g_return_if_fail(cd != NULL);
+  g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
 
 	cairo_save(cd->cr);
 	drawPolyline(cd->cr, n, x, y, gc);
@@ -595,12 +615,10 @@ static void drawPolygon(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext 
 static void Cairo_Polygon(int n, double *x, double *y, 
 				R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
-    g_return_if_fail(cd != NULL);
-    g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
-	g_return_if_fail(GTK_IS_DRAWING_AREA(cd->drawing));
-	g_return_if_fail(GDK_IS_WINDOW(cd->drawing->window));
+  g_return_if_fail(cd != NULL);
+  g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
 
 	cairo_save(cd->cr);
 	drawPolygon(cd->cr, n, x, y, gc);
@@ -677,6 +695,8 @@ static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
     Cairo_locator_info *info;
     guint handler_id;
     gboolean button1;
+    
+    g_return_val_if_fail(GTK_IS_DRAWING_AREA(cd->drawing), FALSE);
 
     info = g_new0(Cairo_locator_info, 1);
 
@@ -709,7 +729,7 @@ static void Cairo_Mode(gint mode, NewDevDesc *dd)
 {
 	CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
-	if (!mode) {
+	if (!mode && cd->drawing) {
 		gtk_widget_queue_draw(cd->drawing);
 		gdk_flush();
 	}
@@ -722,9 +742,10 @@ static void Cairo_Hold(NewDevDesc *dd)
 Rboolean
 configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height, double ps)
 {
-    gint ascent, descent, cw;
+  gint ascent, descent, cw;
 	PangoFont *success;
-    PangoFontDescription *fontdesc;
+  PangoFontDescription *fontdesc;
+  PangoContext *ctx;
 
 	/* setup data structure */
     
@@ -752,8 +773,8 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
     dd->metricInfo = Cairo_MetricInfo;
 
     dd->left = 0;
-    dd->right = width / pixelWidth();
-    dd->bottom = height / pixelHeight();
+    dd->right = width;
+    dd->bottom = height;
     dd->top = 0;
 	
 	fontdesc = getBaseFont(cd);
@@ -764,9 +785,9 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
 		Rprintf("Cannot find base font!\n");
 		return(FALSE);
 	}
-	pango_context_set_font_description(gtk_widget_get_pango_context(cd->drawing), 
-		fontdesc);
-    font_metrics(fontdesc, cd, &cw, &ascent, &descent);
+  
+	pango_context_set_font_description(getPangoContext(cd), fontdesc);
+  font_metrics(fontdesc, cd, &cw, &ascent, &descent);
 	
 	/* starting parameters */
     ps = 2 * (ps / 2);
@@ -819,29 +840,33 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
 	if(!Cairo_Open(dd, cd, width, height)) {
 		freeCairoDesc(cd);
 		return FALSE;
-    }
+  }
 	
-	return(configureCairoDevice(dd, cd, width, height, ps));
+	return(configureCairoDevice(dd, cd, width / pixelWidth(), height / pixelHeight(), ps));
 }
 Rboolean
 asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data)
 {
-	GtkWidget *drawing = GTK_WIDGET(data);
+	GtkWidget *drawing;
 	CairoDesc *cd;
-	gdouble w = width, h = height;
+  gdouble left, right, bottom, top;
+  gboolean success;
 
 	if(!(cd = createCairoDesc()))
 		return FALSE;
 	
-	if(!Cairo_OpenEmbedded(dd, cd, drawing)) {
-		freeCairoDesc(cd);
-		return FALSE;
-    }
+  if (GTK_IS_WIDGET(data))
+    success = Cairo_OpenEmbedded(dd, cd, GTK_WIDGET(data));
+  else success = Cairo_OpenOffscreen(dd, cd, GDK_DRAWABLE(data));
+  
+  if (!success) {
+    freeCairoDesc(cd);
+    return FALSE;
+  }
+  
+  Cairo_Size(&left, &right, &bottom, &top, dd);
 	
-	w = drawing->allocation.width * pixelWidth();
-	h = drawing->allocation.height * pixelHeight();
-	
-	return(configureCairoDevice(dd, cd, w, h, ps));
+	return(configureCairoDevice(dd, cd, right, bottom, ps));
 }
 
 typedef Rboolean (*CairoDeviceCreateFun)(NewDevDesc *, double width, 
@@ -902,8 +927,8 @@ do_Cairo(double *in_width, double *in_height, double *in_pointsize)
 SEXP
 do_asCairoDevice(SEXP widget, SEXP pointsize)
 {
-    GtkWidget *drawing = GTK_WIDGET(R_ExternalPtrAddr(widget));
-    double ps;
+    void *drawing = R_ExternalPtrAddr(widget);
+    double width, height, ps;
     SEXP ans = Rf_allocVector(LGLSXP, 1);
 
     ps = REAL(pointsize)[0];
