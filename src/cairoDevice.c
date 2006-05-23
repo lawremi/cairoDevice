@@ -745,7 +745,6 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
   gint ascent, descent, cw;
 	PangoFont *success;
   PangoFontDescription *fontdesc;
-  PangoContext *ctx;
 
 	/* setup data structure */
     
@@ -847,8 +846,7 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
 Rboolean
 asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data)
 {
-	GtkWidget *drawing;
-	CairoDesc *cd;
+  CairoDesc *cd;
   gdouble left, right, bottom, top;
   gboolean success;
 
@@ -928,7 +926,7 @@ SEXP
 do_asCairoDevice(SEXP widget, SEXP pointsize)
 {
     void *drawing = R_ExternalPtrAddr(widget);
-    double width, height, ps;
+    double ps;
     SEXP ans = Rf_allocVector(LGLSXP, 1);
 
     ps = REAL(pointsize)[0];
