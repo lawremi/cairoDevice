@@ -14,8 +14,8 @@ typedef struct {
 	GtkWidget *drawing;			/* widget to which we are drawing */
 	GdkPixmap *pixmap;			/* off-screen drawable */
 	cairo_t *cr;				/* the cairo context to which we draw */
-	//PangoContext *pango;		/* cairo's pango context */
 	gint width, height;
+  SEXP eventRho, eventResult;
 } CairoDesc;
 
 /* Device driver actions */
@@ -64,3 +64,20 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc*, CairoDesc*, GtkWidget*);
 
 #define BEGIN_SUSPEND_INTERRUPTS
 #define END_SUSPEND_INTERRUPTS
+
+/* R mouse events from non-public Graphics.h */
+typedef enum {meMouseDown = 0,
+	      meMouseUp,
+	      meMouseMove} R_MouseEvent;
+        
+SEXP doMouseEvent(SEXP eventRho, NewDevDesc *dd, R_MouseEvent event,
+			 int buttons, double x, double y);
+       
+/* and the key events */
+typedef enum {knUNKNOWN = -1,
+              knLEFT = 0, knUP, knRIGHT, knDOWN,
+              knF1, knF2, knF3, knF4, knF5, knF6, knF7, knF8, knF9, knF10,
+              knF11, knF12,
+              knPGUP, knPGDN, knEND, knHOME, knINS, knDEL} R_KeyName;
+           
+SEXP doKeybd(SEXP eventRho, NewDevDesc *dd, R_KeyName rkey, char *keyname);

@@ -76,6 +76,7 @@ static gboolean initDisplay(NewDevDesc *dd)
 	cd = (CairoDesc *) dd->deviceSpecific;
 	
   Cairo_Size(&left, &right, &bottom, &top, dd);
+  //g_debug("%f %f %f %f" , left, right, bottom, top);
 	dd->left = left;
 	cd->width = dd->right = right;
 	cd->height = dd->bottom = bottom;
@@ -111,14 +112,12 @@ static gboolean initDisplay(NewDevDesc *dd)
 static void resize(NewDevDesc *dd)
 {
 	initDisplay(dd);
-
-    GEplayDisplayList ((GEDevDesc*) Rf_GetDevice(Rf_devNumber((DevDesc*)dd)));
+  GEplayDisplayList ((GEDevDesc*) Rf_GetDevice(Rf_devNumber((DevDesc*)dd)));
 }
 
 static gboolean realize_event(GtkWidget *widget, NewDevDesc *dd)
 {
     g_return_val_if_fail(dd != NULL, FALSE);
-    
     return(initDisplay(dd));
 }
 
@@ -130,7 +129,7 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
     cd = (CairoDesc *)dd->deviceSpecific;
     g_return_val_if_fail(cd != NULL, FALSE);
     g_return_val_if_fail(GTK_IS_DRAWING_AREA(cd->drawing), FALSE);
-	
+
     if(cd->width != cd->drawing->allocation.width || cd->height != cd->drawing->allocation.height) 
       resize(dd); 
     else if(cd->pixmap) {
@@ -145,6 +144,46 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
     
     return FALSE;
 }
+
+/* converts the Gdk buttons to the button masks used by R's gevent.c */
+#define R_BUTTON(button) pow(2, (button) - 1)
+#define R_BUTTONS(state) (state) & (GDK_BUTTON1_MASK | GDK_BUTTON2_MASK | GDK_BUTTON3_MASK) >> 8
+
+static gboolean button_press_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (dd->gettingEvent)
+    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseDown,
+		  R_BUTTON(event->button), event->x, event->y);
+  return(FALSE);
+}
+
+static gboolean button_release_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (dd->gettingEvent)
+    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseUp,
+		  R_BUTTON(event->button), event->x, event->y);
+  return(FALSE);
+}
+
+static gboolean motion_notify_event(GtkWidget *widget, GdkEventMotion *event, NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (dd->gettingEvent)
+    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseMove,
+		  R_BUTTONS(event->state), event->x, event->y);
+  return(FALSE);
+}
+
+static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (dd->gettingEvent)
+    cd->eventResult = doKeybd(cd->eventRho, dd, -1, gdk_keyval_name(event->keyval));
+  return(FALSE);
+}
+
 static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
 {
     g_return_val_if_fail(dd != NULL, FALSE);
@@ -154,19 +193,31 @@ static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
     return TRUE;
 }
 
+static void setupWidget(GtkWidget *drawing, NewDevDesc *dd)
+{
+  GtkWidget *wid = drawing;
+  gtk_widget_add_events(drawing, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK |
+    GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK);
+  g_signal_connect(G_OBJECT(drawing), "expose_event", G_CALLBACK(expose_event), dd);
+  g_signal_connect(G_OBJECT(drawing), "motion_notify_event", 
+    G_CALLBACK(motion_notify_event), dd);
+  g_signal_connect(G_OBJECT(drawing), "button_release_event", 
+    G_CALLBACK(button_release_event), dd);
+  g_signal_connect(G_OBJECT(drawing), "button_press_event", 
+    G_CALLBACK(button_press_event), dd);
+}
+
 static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *drawing)
 {
 	dd->deviceSpecific = cd;
 	cd->drawing = drawing;
 	// initialize
 	if (!GTK_WIDGET_REALIZED(drawing))
-		g_signal_connect(G_OBJECT (drawing), "realize",
+		g_signal_connect_after(G_OBJECT (drawing), "realize",
 		     G_CALLBACK (realize_event), dd);
 	else initDisplay(dd);
-	// hook it up for drawing
-	g_signal_connect(G_OBJECT(drawing), "expose_event",
-		     G_CALLBACK(expose_event), dd);
-			 
+	// hook it up for drawing and user events
+  setupWidget(drawing, dd);
 	return(TRUE);
 }
 static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *drawing)
@@ -190,8 +241,7 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h)
 
     /* create drawingarea */
   cd->drawing = gtk_drawing_area_new();
-  gtk_widget_set_events(cd->drawing, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK);
-	
+  
 	/* connect to signal handlers, etc */
 	g_signal_connect(G_OBJECT (cd->drawing), "realize",
 		     G_CALLBACK (realize_event), dd);
@@ -200,10 +250,11 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h)
 	gtk_container_add(GTK_CONTAINER(cd->window), cd->drawing);
 	
 	/* connect to signal handlers, etc */
-  g_signal_connect(G_OBJECT(cd->drawing), "expose_event",
-		     G_CALLBACK(expose_event), dd);
+  setupWidget(cd->drawing, dd);
   g_signal_connect(G_OBJECT(cd->window), "delete_event",
-		     G_CALLBACK(delete_event), dd);
+		G_CALLBACK(delete_event), dd);
+  g_signal_connect(G_OBJECT(cd->window), "key_press_event", 
+    G_CALLBACK(key_press_event), dd);
 	
 	gtk_widget_show_all(cd->window);
 	
@@ -438,13 +489,16 @@ static void Cairo_Size(double *left, double *right, double *bottom, double *top,
 {
     CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
     gint width = 0, height = 0;
-    GdkDrawable *drawable = cd->pixmap;
-    
-    if (!drawable)
-      drawable = cd->drawing->window;
-    
-    if (GDK_IS_DRAWABLE(drawable))
-      gdk_drawable_get_size(drawable, &width, &height);
+
+    /* we have to use the allocation width/height if we have a widget, because
+      the new backing pixmap is not created until later */
+    if (cd->drawing) {
+      if (GTK_WIDGET_MAPPED(cd->drawing)) {
+        width = cd->drawing->allocation.width;
+        height = cd->drawing->allocation.height;
+      } else width = height = 10000; // hack to get R to draw before first exposure
+    } else if (GDK_IS_DRAWABLE(cd->pixmap))
+      gdk_drawable_get_size(cd->pixmap, &width, &height);
     
     *left = 0.0;
     *right = (gdouble)width;
@@ -721,7 +775,7 @@ static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
     g_free(info);
 
     if(button1)
-		return TRUE;
+      return TRUE;
     return FALSE;
 }
 
@@ -732,11 +786,45 @@ static void Cairo_Mode(gint mode, NewDevDesc *dd)
 	if (!mode && cd->drawing) {
 		gtk_widget_queue_draw(cd->drawing);
 		gdk_flush();
+    R_gtk_eventHandler(NULL);
 	}
 }
 
 static void Cairo_Hold(NewDevDesc *dd)
 {
+}
+
+static void Cairo_onExit(NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  dd->onExit = NULL;
+  dd->gettingEvent = FALSE;
+  cd->eventRho = NULL;
+}
+
+static SEXP Cairo_GetEvent(SEXP rho, char *prompt)
+{
+    GEDevDesc *dd = GEcurrentDevice();
+    CairoDesc *cd = (CairoDesc *) dd->dev->deviceSpecific;
+    
+    if (cd->eventRho) 
+      error("recursive use of getGraphicsEvent not supported");
+    cd->eventRho = rho;
+    
+    dd->dev->gettingEvent = TRUE;
+    
+    R_WriteConsole(prompt, strlen(prompt));
+    R_WriteConsole("\n", 1);
+    R_FlushConsole();
+    
+    cd->eventResult = NULL;
+    dd->dev->onExit = Cairo_onExit;  /* install callback for cleanup */
+    while (!cd->eventResult || cd->eventResult == R_NilValue) {
+      R_gtk_eventHandler(NULL);
+    }
+    dd->dev->onExit(dd->dev);
+
+    return cd->eventResult;
 }
 
 Rboolean
@@ -770,6 +858,7 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
     dd->mode = Cairo_Mode;
     dd->hold = Cairo_Hold;
     dd->metricInfo = Cairo_MetricInfo;
+    dd->getEvent = Cairo_GetEvent;
 
     dd->left = 0;
     dd->right = width;
@@ -820,6 +909,14 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
     dd->canHAdj = 0; // maybe 1 or 2? 
     dd->canChangeGamma = FALSE; // not yet
 
+    if (cd->drawing) {
+      dd->canGenMouseDown = TRUE; /* can the device generate mousedown events */
+      dd->canGenMouseMove = TRUE; /* can the device generate mousemove events */
+      dd->canGenMouseUp = TRUE;   /* can the device generate mouseup events */
+      if (cd->window)
+        dd->canGenKeybd = TRUE;     /* can the device generate keyboard events */
+    }
+    
     dd->displayListOn = TRUE;
 	
     /* finish */
