@@ -9,13 +9,21 @@ static PangoWeight weight[] = { PANGO_WEIGHT_NORMAL, PANGO_WEIGHT_BOLD };
 CairoDesc *createCairoDesc() {
 	return(g_new0(CairoDesc, 1));
 }
-void freeCairoDesc(CairoDesc *cd) {
+void freeCairoDesc(NewDevDesc *dd) {
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (!cd)
+    return;
+  dd->deviceSpecific = NULL;
+  
   if(cd->pixmap)
 		g_object_unref(cd->pixmap);
+
+  if(cd->drawing)
+    gtk_widget_destroy(cd->drawing);
   
 	if(cd->window)
 		gtk_widget_destroy(cd->window);
-
+  
 	if(cd->cr)
 		cairo_destroy(cd->cr);
 	
@@ -99,6 +107,7 @@ static gboolean initDisplay(NewDevDesc *dd)
 		if (cd->drawing)
       cd->pixmap = gdk_pixmap_new(cd->drawing->window, right, bottom, -1);
 	  cd->cr = gdk_cairo_create(cd->pixmap);
+    //cairo_set_antialias(cd->cr, CAIRO_ANTIALIAS_NONE);
 		//cd->pango = pango_cairo_font_map_create_context(
 		//				PANGO_CAIRO_FONT_MAP(pango_cairo_font_map_get_default()));
 		//pango_cairo_context_set_resolution(cd->pango, 84);
@@ -111,7 +120,6 @@ static gboolean initDisplay(NewDevDesc *dd)
 
 static void resize(NewDevDesc *dd)
 {
-	initDisplay(dd);
   GEplayDisplayList ((GEDevDesc*) Rf_GetDevice(Rf_devNumber((DevDesc*)dd)));
 }
 
@@ -184,13 +192,20 @@ static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, NewDevDes
   return(FALSE);
 }
 
+static void kill_cairo(NewDevDesc *dd)
+{
+  Rf_KillDevice((DevDesc*) Rf_GetDevice(Rf_devNumber ((DevDesc*) dd)));
+}
+
+static void destroy_cb(GtkObject *object, NewDevDesc *dd) {
+  g_return_if_fail(dd != NULL);
+  kill_cairo(dd);
+}
 static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
 {
-    g_return_val_if_fail(dd != NULL, FALSE);
-
-    Rf_KillDevice((DevDesc*) Rf_GetDevice(Rf_devNumber ((DevDesc*) dd)));
-    
-    return TRUE;
+  g_return_val_if_fail(dd != NULL, FALSE);
+  kill_cairo(dd);
+  return TRUE;
 }
 
 static void setupWidget(GtkWidget *drawing, NewDevDesc *dd)
@@ -217,7 +232,8 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *dra
 		     G_CALLBACK (realize_event), dd);
 	else initDisplay(dd);
 	// hook it up for drawing and user events
-  setupWidget(drawing, dd);
+  setupWidget(drawing, dd); // free the device when the widget is gone
+  g_signal_connect(G_OBJECT(drawing), "destroy", G_CALLBACK(destroy_cb), dd);
 	return(TRUE);
 }
 static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *drawing)
@@ -516,6 +532,8 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
   cd = (CairoDesc *) dd->deviceSpecific;
   g_return_if_fail(cd != NULL);
 	g_return_if_fail(GDK_IS_DRAWABLE(cd->pixmap));
+  
+  initDisplay(dd);
     
 	if (!R_OPAQUE(gc->fill)) {
 		blank(cd);
@@ -526,14 +544,10 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
 }
 
 /** kill off the window etc
-	we probably need to disconnect the expose signal from the drawing area,
-	because if we're embedding the device the window is not destroyed
 */
 static void Cairo_Close(NewDevDesc *dd)
 {
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-
-    freeCairoDesc(cd);
+    freeCairoDesc(dd);
 }
 
 #define title_text_inactive "R graphics device %d"
@@ -687,7 +701,7 @@ static void drawText(double x, double y, char *str,
 	cairo_t *cr = cd->cr;
 	
 	PangoFontDescription *desc = getFont(cd, gc);
-	
+
 	// x and y seem a little off, correcting...
 	text_extents(desc, cd, str, &lbearing, NULL, NULL, &ascent, NULL);
 	
@@ -785,8 +799,9 @@ static void Cairo_Mode(gint mode, NewDevDesc *dd)
 	
 	if (!mode && cd->drawing) {
 		gtk_widget_queue_draw(cd->drawing);
+    gdk_window_process_updates(cd->drawing->window,TRUE);
 		gdk_flush();
-    R_gtk_eventHandler(NULL);
+    //R_gtk_eventHandler(NULL);
 	}
 }
 
@@ -934,7 +949,7 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
 	
 	// need to create drawing area before we can configure the device
 	if(!Cairo_Open(dd, cd, width, height)) {
-		freeCairoDesc(cd);
+		freeCairoDesc(dd);
 		return FALSE;
   }
 	
@@ -955,7 +970,7 @@ asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data
   else success = Cairo_OpenOffscreen(dd, cd, GDK_DRAWABLE(data));
   
   if (!success) {
-    freeCairoDesc(cd);
+    freeCairoDesc(dd);
     return FALSE;
   }
   
