@@ -1,5 +1,10 @@
 #include <gtk/gtk.h>
 
+/* extra backends */
+#include <cairo/cairo-pdf.h>
+#include <cairo/cairo-ps.h>
+#include <cairo/cairo-svg.h>
+
 #include <locale.h>
 
 #include <R.h>
@@ -14,6 +19,8 @@ typedef struct {
 	GtkWidget *drawing;			/* widget to which we are drawing */
 	GdkPixmap *pixmap;			/* off-screen drawable */
 	cairo_t *cr;				/* the cairo context to which we draw */
+  cairo_surface_t *surface; /* if non-NULL we have an alt surface like svg */
+  gchar *filename;
 	gint width, height;
   SEXP eventRho, eventResult;
 } CairoDesc;
@@ -57,7 +64,7 @@ static void Cairo_Text(double x, double y, char *str,
 		     double rot, double hadj, 
 		     R_GE_gcontext *gc,
 		     NewDevDesc *dd);
-static Rboolean Cairo_Open(NewDevDesc*, CairoDesc*, double, double);
+static Rboolean Cairo_Open(NewDevDesc*, CairoDesc*, double, double, const gchar **);
 static Rboolean Cairo_OpenEmbedded(NewDevDesc*, CairoDesc*, GtkWidget*);
 
 #define SYMBOL_FONTFACE 5
@@ -81,3 +88,6 @@ typedef enum {knUNKNOWN = -1,
               knPGUP, knPGDN, knEND, knHOME, knINS, knDEL} R_KeyName;
            
 SEXP doKeybd(SEXP eventRho, NewDevDesc *dd, R_KeyName rkey, char *keyname);
+
+/* event handler */
+void R_gtk_eventHandler(void *userData);

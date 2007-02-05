@@ -1,8 +1,15 @@
-Cairo <- function(width = 7, height = 7, pointsize = 10)
+.surfaces <- c("screen", "png", "pdf", "ps", "svg")
+
+Cairo <- function(width = 7, height = 7, pointsize = 10, surface = "screen", filename = NULL)
 {
-    .C("do_Cairo", as.numeric(width), as.numeric(height), as.numeric(pointsize), 
-		PACKAGE="cairoDevice")
-    return(invisible(TRUE))
+  if (!(surface %in% .surfaces))
+    stop("Surface must be one of: ", paste(.surfaces, collapse=", "))
+  if (surface != "screen" && !is.character(filename))
+    stop("Filename must be provided for ", surface, " surface")
+  surface_info <- c(surface, filename)
+  .C("do_Cairo", as.numeric(width), as.numeric(height), as.numeric(pointsize),
+    as.character(surface_info), PACKAGE="cairoDevice")
+  return(invisible(TRUE))
 }
 
 asCairoDevice <- function(widget, pointsize = 10)
