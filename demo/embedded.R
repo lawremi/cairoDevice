@@ -1,5 +1,5 @@
 win <- gtkWindow()
 da <- gtkDrawingArea()
-asCairoDevice(da)
 win$add(da)
+asCairoDevice(da)
 plot(1:10)

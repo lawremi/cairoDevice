@@ -109,8 +109,10 @@ static gboolean initDisplay(NewDevDesc *dd)
     gdk_cursor_unref(cursor);
   }
 	
-	if(cd->cr)
+	if(cd->cr) {
+    cairo_show_page(cd->cr);
 		cairo_destroy(cd->cr);
+  }
 	if(cd->pixmap && cd->drawing)
 	  g_object_unref(cd->pixmap);
 	
@@ -211,8 +213,10 @@ static void kill_cairo(NewDevDesc *dd)
   Rf_KillDevice((DevDesc*) Rf_GetDevice(Rf_devNumber ((DevDesc*) dd)));
 }
 
-static void unrealize_cb(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd) {
+static void unrealize_cb(GtkWidget *widget, NewDevDesc *dd) {
   g_return_if_fail(dd != NULL);
+  /* don't try to destroy the widget */
+  ((CairoDesc *) dd->deviceSpecific)->drawing = NULL;
   kill_cairo(dd);
 }
 static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
@@ -241,10 +245,8 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *dra
 	dd->deviceSpecific = cd;
 	cd->drawing = drawing;
 	// initialize
-	if (!GTK_WIDGET_REALIZED(drawing))
-		g_signal_connect_after(G_OBJECT (drawing), "realize",
-		     G_CALLBACK (realize_event), dd);
-	else initDisplay(dd);
+  g_return_val_if_fail(GTK_WIDGET_REALIZED(drawing), FALSE);
+	initDisplay(dd);
 	// hook it up for drawing and user events
   setupWidget(drawing, dd); // free the device when it's no longer able to draw
   g_signal_connect(G_OBJECT(drawing), "unrealize", G_CALLBACK(unrealize_cb), dd);
@@ -571,7 +573,7 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
   gint width = cd->width, height = cd->height;
 	
   initDisplay(dd);
-    
+  
 	if (!R_OPAQUE(gc->fill)) {
 		blank(dd);
   }

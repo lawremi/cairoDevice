@@ -38,5 +38,8 @@ void loadGTK()
     int argc = 1;
     argv = (char **) g_malloc(argc * sizeof(char *));
     argv[0] = g_strdup("R");
-    gtk_init(&argc, &argv);
+    if (!gdk_display_get_default()) {
+      gtk_disable_setlocale();
+      gtk_init_check(&argc, &argv);
+    }
 }
