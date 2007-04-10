@@ -277,13 +277,22 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
     } else {
       width = w*72.0;
       height = h*72.0;
+      #ifdef CAIRO_HAS_PDF_SURFACE
       if (!strcmp(surface_info[0], "pdf"))
         surface = cairo_pdf_surface_create(surface_info[1], width, height);
-      else if (!strcmp(surface_info[0], "svg"))
+      else
+      #endif
+      #ifdef CAIRO_HAS_SVG_SURFACE
+      if (!strcmp(surface_info[0], "svg"))
         surface = cairo_svg_surface_create(surface_info[1], width, height);
-      else if (!strcmp(surface_info[0], "ps"))
+      else
+      #endif
+      #ifdef CAIRO_HAS_PS_SURFACE
+      if (!strcmp(surface_info[0], "ps"))
         surface = cairo_ps_surface_create(surface_info[1], width, height);
-      else {
+      else
+      #endif
+      {
         warning("Unknown surface type: %s", surface_info[0]);
         return(FALSE);
       }
@@ -944,7 +953,7 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
     dd->startfont = 1; 
     dd->startps = ps;
     dd->startcol = R_RGB(0, 0, 0);
-    dd->startfill = NA_INTEGER;
+    dd->startfill = R_TRANWHITE;
     dd->startlty = LTY_SOLID; 
     dd->startgamma = 1;
 	

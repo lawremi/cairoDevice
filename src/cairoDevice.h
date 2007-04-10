@@ -79,7 +79,9 @@ typedef enum {meMouseDown = 0,
         
 SEXP doMouseEvent(SEXP eventRho, NewDevDesc *dd, R_MouseEvent event,
 			 int buttons, double x, double y);
-       
+
+void	R_WriteConsole(char*, int);
+
 /* and the key events */
 typedef enum {knUNKNOWN = -1,
               knLEFT = 0, knUP, knRIGHT, knDOWN,
