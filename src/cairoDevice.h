@@ -1,9 +1,13 @@
 #include <gtk/gtk.h>
 
+#include <cairo.h>
+
 /* extra backends */
+#if CAIRO_VERSION > CAIRO_VERSION_ENCODE(1,2,0)
 #include <cairo-pdf.h>
 #include <cairo-ps.h>
 #include <cairo-svg.h>
+#endif
 
 #include <locale.h>
 
@@ -14,15 +18,30 @@
 #include <R_ext/GraphicsDevice.h>
 #include <R_ext/GraphicsEngine.h>
 
+typedef struct _Cairo_locator_info {
+    guint x;
+    guint y;
+    gboolean button1;
+    guint handler_id;
+    gboolean active;
+} CairoLocator;
+
+typedef struct _CairoEvent {
+  SEXP rho;
+  SEXP result;
+  gboolean active;
+} CairoEvent;
+
 typedef struct {
 	GtkWidget *window;			/* Graphics frame */
 	GtkWidget *drawing;			/* widget to which we are drawing */
 	GdkPixmap *pixmap;			/* off-screen drawable */
 	cairo_t *cr;				/* the cairo context to which we draw */
   cairo_surface_t *surface; /* if non-NULL we have an alt surface like svg */
-  gchar *filename;
-	gint width, height;
-  SEXP eventRho, eventResult;
+  gchar *filename; /* filename for certain Cairo backends */
+	gint width, height; /* width and height of device */
+  CairoEvent *event; /* stores information for 'getGraphicsEvent' support */
+  CairoLocator *locator; /* stores information for 'locator' support */
 } CairoDesc;
 
 /* Device driver actions */

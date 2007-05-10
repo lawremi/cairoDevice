@@ -39,6 +39,23 @@ void freeCairoDesc(NewDevDesc *dd) {
 	g_free(cd);
 }
 
+static void activateDevice(NewDevDesc *dev)
+{
+  GEDevDesc *dd;
+  CairoDesc *cd = (CairoDesc *)dev->deviceSpecific;
+  GObject *obj = cd->drawing ? G_OBJECT(cd->drawing) : G_OBJECT(cd->pixmap);
+  gsetVar(install(".Device"), mkString("Cairo"), R_NilValue);
+  dd = GEcreateDevDesc(dev);
+  //dd->newDevStruct = 1;
+  Rf_addDevice((DevDesc*) dd);
+  GEinitDisplayList(dd);
+  if (obj) {
+    SEXP devnum = ScalarInteger(Rf_devNumber((DevDesc*)dev) + 1);
+    R_PreserveObject(devnum);
+    g_object_set_data_full(obj, ".devnum", devnum, (GDestroyNotify)R_ReleaseObject);
+  }
+}
+
 /** need the pixel width/height in inches so we can convert 
 	from R's inches to our pixels */
 static double pixelWidth(void)
@@ -87,7 +104,7 @@ static void blank(NewDevDesc *dd) {
     gtk_widget_queue_draw(cd->drawing);
 }
 
-static gboolean initDisplay(NewDevDesc *dd)
+static gboolean initDevice(NewDevDesc *dd)
 {
 	CairoDesc *cd;
 	GdkCursor *cursor;
@@ -142,7 +159,16 @@ static void resize(NewDevDesc *dd)
 static gboolean realize_event(GtkWidget *widget, NewDevDesc *dd)
 {
     g_return_val_if_fail(dd != NULL, FALSE);
-    return(initDisplay(dd));
+    initDevice(dd);
+    return(FALSE);
+}
+static gboolean realize_embedded(GtkWidget *widget, NewDevDesc *dd)
+{ /* different from above in that embedded device needs to be activated,
+     since it wasn't when the device was created */
+    g_return_val_if_fail(dd != NULL, FALSE);
+    initDevice(dd);
+    activateDevice(dd);
+    return(FALSE);
 }
 
 static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *dd)
@@ -169,6 +195,25 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
     return FALSE;
 }
 
+static void event_finish(NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  dd->onExit = NULL;
+  dd->gettingEvent = FALSE;
+  cd->event->active = FALSE;
+  cd->event = NULL;
+}
+static void event_maybe_finish(NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (cd->event->result && cd->event->result != R_NilValue)
+    event_finish(dd);
+}
+static void CairoEvent_onExit(NewDevDesc *dd)
+{
+  event_finish(dd);
+}
+
 /* converts the Gdk buttons to the button masks used by R's gevent.c */
 #define R_BUTTON(button) pow(2, (button) - 1)
 #define R_BUTTONS(state) (state) & (GDK_BUTTON1_MASK | GDK_BUTTON2_MASK | GDK_BUTTON3_MASK) >> 8
@@ -176,36 +221,76 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
 static gboolean button_press_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  if (dd->gettingEvent)
-    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseDown,
+  if (dd->gettingEvent) {
+    cd->event->result = doMouseEvent(cd->event->rho, dd, meMouseDown,
 		  R_BUTTON(event->button), event->x, event->y);
+    event_maybe_finish(dd);
+  }
   return(FALSE);
 }
 
 static gboolean button_release_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  if (dd->gettingEvent)
-    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseUp,
+  if (dd->gettingEvent) {
+    cd->event->result = doMouseEvent(cd->event->rho, dd, meMouseUp,
 		  R_BUTTON(event->button), event->x, event->y);
+    event_maybe_finish(dd);
+  }
   return(FALSE);
 }
 
 static gboolean motion_notify_event(GtkWidget *widget, GdkEventMotion *event, NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  if (dd->gettingEvent)
-    cd->eventResult = doMouseEvent(cd->eventRho, dd, meMouseMove,
+  if (dd->gettingEvent) {
+    cd->event->result = doMouseEvent(cd->event->rho, dd, meMouseMove,
 		  R_BUTTONS(event->state), event->x, event->y);
+    event_maybe_finish(dd);
+  }
   return(FALSE);
 }
 
 static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  if (dd->gettingEvent)
-    cd->eventResult = doKeybd(cd->eventRho, dd, -1, gdk_keyval_name(event->keyval));
+  if (dd->gettingEvent) {
+    cd->event->result = doKeybd(cd->event->rho, dd, -1, gdk_keyval_name(event->keyval));
+    event_maybe_finish(dd);
+  }
   return(FALSE);
+}
+
+static SEXP Cairo_GetEvent(SEXP rho, char *prompt)
+{
+    GEDevDesc *dd = GEcurrentDevice();
+    CairoDesc *cd = (CairoDesc *) dd->dev->deviceSpecific;
+    CairoEvent *event = g_new0(CairoEvent, 1);
+    SEXP result = R_NilValue;
+    
+    if (cd->event) 
+      error("recursive use of getGraphicsEvent not supported");
+    
+    cd->event = event;
+    event->rho = rho;
+    event->result = R_NilValue;
+    
+    dd->dev->gettingEvent = TRUE;
+    
+    R_WriteConsole(prompt, strlen(prompt));
+    R_WriteConsole("\n", 1);
+    R_FlushConsole();
+
+    dd->dev->onExit = CairoEvent_onExit;  /* install callback for cleanup */
+    event->active = TRUE;
+    while (event->active) {
+      R_gtk_eventHandler(NULL);
+    }
+    
+    if (event->result)
+      result = event->result;
+    g_free(event);
+    return result;
 }
 
 static void kill_cairo(NewDevDesc *dd)
@@ -215,9 +300,11 @@ static void kill_cairo(NewDevDesc *dd)
 
 static void unrealize_cb(GtkWidget *widget, NewDevDesc *dd) {
   g_return_if_fail(dd != NULL);
-  /* don't try to destroy the widget */
-  ((CairoDesc *) dd->deviceSpecific)->drawing = NULL;
-  kill_cairo(dd);
+  if (dd->deviceSpecific) { /* make sure not called from freeCairoDesc */
+    /* don't try to destroy the widget, since it's already being destroyed */
+    ((CairoDesc *) dd->deviceSpecific)->drawing = NULL;
+    kill_cairo(dd);
+  }
 }
 static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
 {
@@ -245,8 +332,10 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *dra
 	dd->deviceSpecific = cd;
 	cd->drawing = drawing;
 	// initialize
-  g_return_val_if_fail(GTK_WIDGET_REALIZED(drawing), FALSE);
-	initDisplay(dd);
+  /*g_return_val_if_fail(GTK_WIDGET_REALIZED(drawing), FALSE);*/
+  if (GTK_WIDGET_REALIZED(drawing))
+    initDevice(dd);
+  else g_signal_connect(G_OBJECT(drawing), "realize", G_CALLBACK(realize_embedded), dd);
 	// hook it up for drawing and user events
   setupWidget(drawing, dd); // free the device when it's no longer able to draw
   g_signal_connect(G_OBJECT(drawing), "unrealize", G_CALLBACK(unrealize_cb), dd);
@@ -258,7 +347,7 @@ static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *
 	cd->pixmap = drawing;
   g_object_ref(G_OBJECT(cd->pixmap));
 	// initialize
-	initDisplay(dd);		 
+	initDevice(dd);		 
 	return(TRUE);
 }
 static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h, 
@@ -313,7 +402,7 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
   
 	/* connect to signal handlers, etc */
 	g_signal_connect(G_OBJECT (cd->drawing), "realize",
-		     G_CALLBACK (realize_event), dd);
+	      G_CALLBACK (realize_event), dd);
 	
 	/* place and realize the drawing area */
 	gtk_container_add(GTK_CONTAINER(cd->window), cd->drawing);
@@ -326,7 +415,7 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
     G_CALLBACK(key_press_event), dd);
 	
 	gtk_widget_show_all(cd->window);
-	
+  
 	return(TRUE);
 }
 
@@ -581,7 +670,7 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
   CairoDesc *cd = dd->deviceSpecific;
   gint width = cd->width, height = cd->height;
 	
-  initDisplay(dd);
+  initDevice(dd);
   
 	if (!R_OPAQUE(gc->fill)) {
 		blank(dd);
@@ -598,6 +687,8 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
 static void Cairo_Close(NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  if (dd->onExit)
+    dd->onExit(dd);
   if (cd->filename) /* we have an image surface, write to png */
     cairo_surface_write_to_png(cd->surface, cd->filename);
   freeCairoDesc(dd);
@@ -786,22 +877,19 @@ static void Cairo_Text(double x, double y, char *str,
 	cairo_restore(cd->cr);
 }
 
-
-typedef struct _Cairo_locator_info Cairo_locator_info;
-
-struct _Cairo_locator_info {
-    guint x;
-    guint y;
-    gboolean button1;
-};
+static void locator_finish(NewDevDesc *dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  g_signal_handler_disconnect(G_OBJECT(cd->drawing), cd->locator->handler_id);
+  dd->onExit = NULL;
+  cd->locator->active = FALSE;
+}
 
 static void locator_button_press(GtkWidget *widget,
 				 GdkEventButton *event,
-				 gpointer user_data)
+				 NewDevDesc *dd)
 {
-    Cairo_locator_info *info;
-
-    info = (Cairo_locator_info *) user_data;
+    CairoLocator *info = ((CairoDesc *) dd->deviceSpecific)->locator;
 
     info->x = event->x;
     info->y = event->y;
@@ -809,41 +897,50 @@ static void locator_button_press(GtkWidget *widget,
 		info->button1 = TRUE;
     else
 		info->button1 = FALSE;
+    
+    locator_finish(dd);
+}
 
-    gtk_main_quit();
+static void CairoLocator_onExit(NewDevDesc *dd)
+{
+  locator_finish(dd);
 }
 
 static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
 {
     CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-    Cairo_locator_info *info;
-    guint handler_id;
+    CairoLocator *info;
     gboolean button1;
     
     g_return_val_if_fail(GTK_IS_DRAWING_AREA(cd->drawing), FALSE);
-
-    info = g_new0(Cairo_locator_info, 1);
-
+    
+    info = g_new0(CairoLocator, 1);
+    cd->locator = info;
+    
     /* Flush any pending events */
     while(gtk_events_pending())
-		gtk_main_iteration();
+      gtk_main_iteration();
 
     /* connect signal */
-    handler_id = g_signal_connect(G_OBJECT(cd->drawing),
+    info->handler_id = g_signal_connect(G_OBJECT(cd->drawing),
 				  "button-press-event",
-				  G_CALLBACK(locator_button_press), info);
+				  G_CALLBACK(locator_button_press), dd);
+    
+    /* and an exit handler in case the window gets closed */
+    dd->onExit = CairoLocator_onExit;
     
     /* run the handler */
-    gtk_main();
-
+    info->active = TRUE;
+    while (info->active) {
+      R_gtk_eventHandler(NULL);
+    }
+    
     *x = (double) info->x;
     *y = (double) info->y;
     button1 = info->button1;
 
-    /* clean up */
-    g_signal_handler_disconnect(G_OBJECT(cd->drawing), handler_id);
     g_free(info);
-
+    
     if(button1)
       return TRUE;
     return FALSE;
@@ -863,39 +960,6 @@ static void Cairo_Mode(gint mode, NewDevDesc *dd)
 
 static void Cairo_Hold(NewDevDesc *dd)
 {
-}
-
-static void Cairo_onExit(NewDevDesc *dd)
-{
-  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  dd->onExit = NULL;
-  dd->gettingEvent = FALSE;
-  cd->eventRho = NULL;
-}
-
-static SEXP Cairo_GetEvent(SEXP rho, char *prompt)
-{
-    GEDevDesc *dd = GEcurrentDevice();
-    CairoDesc *cd = (CairoDesc *) dd->dev->deviceSpecific;
-    
-    if (cd->eventRho) 
-      error("recursive use of getGraphicsEvent not supported");
-    cd->eventRho = rho;
-    
-    dd->dev->gettingEvent = TRUE;
-    
-    R_WriteConsole(prompt, strlen(prompt));
-    R_WriteConsole("\n", 1);
-    R_FlushConsole();
-    
-    cd->eventResult = NULL;
-    dd->dev->onExit = Cairo_onExit;  /* install callback for cleanup */
-    while (!cd->eventResult || cd->eventResult == R_NilValue) {
-      R_gtk_eventHandler(NULL);
-    }
-    dd->dev->onExit(dd->dev);
-
-    return cd->eventResult;
 }
 
 Rboolean
@@ -1038,11 +1102,11 @@ asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data
 typedef Rboolean (*CairoDeviceCreateFun)(NewDevDesc *, double width, 
 	double height, double pointsize, void *data);
 
-static  GEDevDesc *
+static  NewDevDesc *
 initCairoDevice(double width, double height, double ps, void *data, CairoDeviceCreateFun init_fun)
 {
-    GEDevDesc *dd;
     NewDevDesc *dev;
+    CairoDesc *cd;
 
     R_CheckDeviceAvailable();
     BEGIN_SUSPEND_INTERRUPTS {
@@ -1055,16 +1119,14 @@ initCairoDevice(double width, double height, double ps, void *data, CairoDeviceC
 			free(dev);
 			PROBLEM  "unable to start device cairo" ERROR;
 		}
-		gsetVar(install(".Device"), mkString("Cairo"), R_NilValue);
-		dd = GEcreateDevDesc(dev);
-		//dd->newDevStruct = 1;
-		Rf_addDevice((DevDesc*) dd);
-		GEinitDisplayList(dd);
+    cd = (CairoDesc *)dev->deviceSpecific;
+    /* wait to do this until the device is realized (if applicable) */
+		if (!cd->drawing || GTK_WIDGET_REALIZED(cd->drawing))
+      activateDevice(dev);
     } END_SUSPEND_INTERRUPTS;
 
     gdk_flush();
-
-    return(dd);
+    return(dev);
 }
 
 
