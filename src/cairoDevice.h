@@ -12,6 +12,7 @@
 #include <locale.h>
 
 #include <R.h>
+#include <Rversion.h>
 #include <Rinternals.h>
 #include <Rgraphics.h>
 #include <Rdevices.h>
@@ -91,6 +92,9 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc*, CairoDesc*, GtkWidget*);
 #define BEGIN_SUSPEND_INTERRUPTS
 #define END_SUSPEND_INTERRUPTS
 
+void	R_WriteConsole(char*, int);
+
+#if defined(R_VERSION) && R_VERSION < R_Version(2, 6, 0)
 /* R mouse events from non-public Graphics.h */
 typedef enum {meMouseDown = 0,
 	      meMouseUp,
@@ -98,8 +102,6 @@ typedef enum {meMouseDown = 0,
         
 SEXP doMouseEvent(SEXP eventRho, NewDevDesc *dd, R_MouseEvent event,
 			 int buttons, double x, double y);
-
-void	R_WriteConsole(char*, int);
 
 /* and the key events */
 typedef enum {knUNKNOWN = -1,
@@ -109,6 +111,7 @@ typedef enum {knUNKNOWN = -1,
               knPGUP, knPGDN, knEND, knHOME, knINS, knDEL} R_KeyName;
            
 SEXP doKeybd(SEXP eventRho, NewDevDesc *dd, R_KeyName rkey, char *keyname);
+#endif
 
 /* event handler */
 void R_gtk_eventHandler(void *userData);

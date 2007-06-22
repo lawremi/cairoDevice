@@ -880,7 +880,9 @@ static void Cairo_Text(double x, double y, char *str,
 static void locator_finish(NewDevDesc *dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  /* clean up handler */
   g_signal_handler_disconnect(G_OBJECT(cd->drawing), cd->locator->handler_id);
+  /* turn off locator */
   dd->onExit = NULL;
   cd->locator->active = FALSE;
 }
@@ -917,6 +919,11 @@ static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
     info = g_new0(CairoLocator, 1);
     cd->locator = info;
     
+    /* force update to show identity */
+    gtk_widget_queue_draw(cd->drawing);
+    gdk_window_process_updates(cd->drawing->window,TRUE);
+    gdk_flush();
+
     /* Flush any pending events */
     while(gtk_events_pending())
       gtk_main_iteration();

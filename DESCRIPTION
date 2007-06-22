@@ -1,5 +1,5 @@
 Package: cairoDevice
-Version: 2.2
+Version: 2.3
 Date:    2007/4/9
 Title: Loadable cairo device driver for R
 Author:  Michael Lawrence, Lyndon Drake

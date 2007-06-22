@@ -1,6 +1,6 @@
-.First.lib <- function(libname, pkgname)
+.onLoad <- function(libname, pkgname)
 {
-    library.dynam("cairoDevice", pkgname, libname)
+    #library.dynam("cairoDevice", pkgname, libname)
 		.C("loadGTK", PACKAGE="cairoDevice")
 		.C("R_gtk_setEventHandler", PACKAGE="cairoDevice")
     options(device="Cairo")
