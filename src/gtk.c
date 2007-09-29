@@ -20,8 +20,12 @@ R_gtk_setEventHandler()
     #ifndef WIN32
     static InputHandler *h = NULL;
     if(!h)
-	h = addInputHandler(R_InputHandlers, ConnectionNumber(GDK_DISPLAY()),
+    {
+      if (!GDK_DISPLAY())
+        error("GDK display not found - please make sure X11 is running");
+      h = addInputHandler(R_InputHandlers, ConnectionNumber(GDK_DISPLAY()),
 			    R_gtk_eventHandler, -1);
+    }
     #else
     R_tcldo = R_gtk_eventHandler;
     #endif
@@ -32,14 +36,15 @@ R_gtk_setEventHandler()
   another package, e.g.  RGtk, so that people can add their own 
   options.
  */
-void loadGTK()
+void loadGTK(int *success)
 {
     char **argv; 
     int argc = 1;
+    *success = TRUE;
     argv = (char **) g_malloc(argc * sizeof(char *));
     argv[0] = g_strdup("R");
     if (!gdk_display_get_default()) {
       gtk_disable_setlocale();
-      gtk_init_check(&argc, &argv);
+      *success = gtk_init_check(&argc, &argv);
     }
 }

@@ -46,7 +46,7 @@ static void activateDevice(NewDevDesc *dev)
   GObject *obj = cd->drawing ? G_OBJECT(cd->drawing) : G_OBJECT(cd->pixmap);
   gsetVar(install(".Device"), mkString("Cairo"), R_NilValue);
   dd = GEcreateDevDesc(dev);
-  //dd->newDevStruct = 1;
+  /*dd->newDevStruct = 1;*/
   Rf_addDevice((DevDesc*) dd);
   GEinitDisplayList(dd);
   if (obj) {
@@ -430,15 +430,15 @@ static PangoFontDescription *getFont(CairoDesc *cd, R_GE_gcontext *gc)
 	size = gc->cex * gc->ps + 0.5;
 	
 	basedesc = getBaseFont(cd);
-    fontdesc = pango_font_description_new();
-    if (face == SYMBOL_FONTFACE) {
-		pango_font_description_set_family(fontdesc, "symbol");
-    } else {
-		if (strlen(gc->fontfamily))
-			pango_font_description_set_family(fontdesc, gc->fontfamily);
-		pango_font_description_set_weight(fontdesc, weight[(face-1)%2]);
-		pango_font_description_set_style(fontdesc, slant[((face-1)/2)%2]);
-    }
+  fontdesc = pango_font_description_new();
+  if (face == SYMBOL_FONTFACE) {
+    pango_font_description_set_family(fontdesc, "symbol");
+  } else {
+    if (strlen(gc->fontfamily))
+      pango_font_description_set_family(fontdesc, gc->fontfamily);
+    pango_font_description_set_weight(fontdesc, weight[(face-1)%2]);
+    pango_font_description_set_style(fontdesc, slant[((face-1)/2)%2]);
+  }
 	pango_font_description_set_size(fontdesc, PANGO_SCALE * size);
 	pango_font_description_merge(fontdesc, basedesc, FALSE);
 	
@@ -456,7 +456,7 @@ static PangoFontDescription *getFont(CairoDesc *cd, R_GE_gcontext *gc)
 static PangoLayout *layoutText(PangoFontDescription *desc, const char *str, CairoDesc *cd)
 {
 	gsize bytes_written;
-    gchar *utf8;
+  gchar *utf8;
 	PangoLayout *layout;
 	
 	//pango_cairo_update_context(cd->cr, cd->pango);
@@ -466,35 +466,97 @@ static PangoLayout *layoutText(PangoFontDescription *desc, const char *str, Cair
   else layout = pango_layout_new(gdk_pango_context_get());
 	pango_layout_set_font_description(layout, desc);
 	utf8 = g_locale_to_utf8(str, -1, NULL, &bytes_written, NULL);
-    pango_layout_set_text(layout, utf8, -1);
+  pango_layout_set_text(layout, utf8, -1);
 	
 	g_free(utf8);
 	
 	return(layout);
 }
 
+/* Adobe -> UTF8 translation courtesy of Mikhail Kondrin */
+static PangoLayout *layoutMath(PangoFontDescription *desc, const char *str, CairoDesc *cd)
+{
+  gsize bytes_written;
+  gchar *utf8;
+  PangoLayout *layout;
+  GString * z = g_string_new(NULL);
+  gunichar unisym[190]={
+    0x0020, 0x0021, 0x2200, 0x0023, 0x2203, 0x0025, 0x0026, 0x220B, 0x0028,
+    0x0029, 0x2217, 0x002B, 0x002C, 0x2212, 0x002E, 0x002F, 0x0030, 0x0031,
+    0x0032, 0x0033, 0x0034, 0x0035, 0x0036, 0x0037, 0x0038, 0x0039, 0x003A,
+    0x003B, 0x003C, 0x003D, 0x003E, 0x003F, 0x2245, 0x0391, 0x0392, 0x03A7,
+    0x0394, 0x0395, 0x03A6, 0x0393, 0x0397, 0x0399, 0x03D1, 0x039A, 0x039B,
+    0x039C, 0x039D, 0x039F, 0x03A0, 0x0398, 0x03A1, 0x03A3, 0x03A4, 0x03A5,
+    0x03C2, 0x2126, 0x039E, 0x03A8, 0x0396, 0x005B, 0x2234, 0x005D, 0x22A5,
+    0x005F, 0xF8E5, 0x03B1, 0x03B2, 0x03C7, 0x03B4, 0x03B5, 0x03C6, 0x03B3,
+    0x03B7, 0x03B9, 0x03D5, 0x03BA, 0x03BB, 0x03BC, 0x03BD, 0x03BF, 0x03C0,
+    0x03B8, 0x03C1, 0x03C3, 0x03C4, 0x03C5, 0x03D6, 0x03C9, 0x03BE, 0x03C8,
+    0x03B6, 0x007B, 0x007C, 0x007D, 0x223C, 0x20AC, 0x03D2, 0x2032, 0x2264,
+    0x2044, 0x221E, 0x0192, 0x2663, 0x2666, 0x2665, 0x2660, 0x2194, 0x2190,
+    0x2191, 0x2192, 0x2193, 0x00B0, 0x00B1, 0x2033, 0x2265, 0x00D7, 0x221D,
+    0x2202, 0x2022, 0x00F7, 0x2260, 0x2261, 0x2248, 0x2026, 0xF8E6, 0xF8E7,
+    0x21B5, 0x2135, 0x2111, 0x211C, 0x2118, 0x2297, 0x2295, 0x2205, 0x2229,
+    0x222A, 0x2283, 0x2287, 0x2284, 0x2282, 0x2286, 0x2208, 0x2209, 0x2220,
+    0x2207, 0xF6DA, 0xF6D9, 0xF6DB, 0x220F, 0x221A, 0x22C5, 0x00AC, 0x2227,
+    0x2228, 0x21D4, 0x21D0, 0x21D1, 0x21D2, 0x21D3, 0x25CA, 0x2329, 0xF8E8,
+    0xF8E9, 0xF8EA, 0x2211, 0xF8EB, 0xF8EC, 0xF8ED, 0xF8EE, 0xF8EF, 0xF8F0,
+    0xF8F1, 0xF8F2, 0xF8F3, 0xF8F4, 0x0020, 0x232A, 0x222B, 0x2320, 0xF8F5,
+    0x2321, 0xF8F6, 0xF8F7, 0xF8F8, 0xF8F9, 0xF8FA, 0xF8FB, 0xF8FC, 0xF8FD,
+    0xF8FE
+  };
+  gint i;
+  guchar j;
+  gunichar z0;
+  
+  if (cd->drawing)
+    layout = gtk_widget_create_pango_layout(cd->drawing, NULL);
+  else layout = pango_layout_new(gdk_pango_context_get());
+  pango_layout_set_font_description(layout, desc);
+  
+  z0=0x20;
+  for (i=0;i<strlen(str);i++){
+    j=*(str+i);
+    if ((j>=0x20) & (j<=0x7F))
+      z0=unisym[j-32];
+    else if ((j>=0xA0) & (j<=0xFE))
+      z0=unisym[j-65];
+    g_string_append_unichar(z,z0);
+  }
+  
+  pango_layout_set_text(layout, z->str, -1);
+  
+  g_string_free(z,1);
+  
+  return(layout);
+}
+
 static void
-text_extents(PangoFontDescription *desc, CairoDesc *cd, const gchar *text,
-	      gint *lbearing, gint *rbearing, gint *width, gint *ascent, gint *descent)
+text_extents(PangoFontDescription *desc, CairoDesc *cd, R_GE_gcontext *gc, 
+  const gchar *text, gint *lbearing, gint *rbearing, gint *width, gint *ascent, gint *descent)
 {
 	PangoLayout *layout;
-    PangoRectangle rect;
+  PangoRectangle rect;
 	
-	layout = layoutText(desc, text, cd);
+  if (gc->fontface!=SYMBOL_FONTFACE) {
+    layout = layoutText(desc, text, cd);
+  } else {
+    layout = layoutMath(desc, text, cd);
+  }
+	
 	pango_layout_line_get_pixel_extents(pango_layout_get_line(layout, 0), NULL, &rect);
 
-    if(ascent)
+  if(ascent)
 		*ascent = PANGO_ASCENT(rect);
-    if(descent)
+  if(descent)
 		*descent = PANGO_DESCENT(rect);
-    if(width)
+  if(width)
 		*width = rect.width;
-    if(lbearing)
+  if(lbearing)
 		*lbearing = PANGO_LBEARING(rect);
-    if(rbearing)
+  if(rbearing)
 		*rbearing = PANGO_RBEARING(rect);
 	
-    g_object_unref(layout);
+  g_object_unref(layout);
 }
 
 static void font_metrics(PangoFontDescription *desc, CairoDesc *cd, 
@@ -588,11 +650,11 @@ static void drawRect(cairo_t *cr, double x0, double y0, double x1, double y1,
 
 static double Cairo_StrWidth(char *str, R_GE_gcontext *gc, NewDevDesc *dd)
 {
-    gint width;
-    CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  gint width;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
 	PangoFontDescription *desc = getFont(cd, gc);
-	text_extents(desc, cd, str, NULL, NULL, &width, NULL, NULL);
+	text_extents(desc, cd, gc, str, NULL, NULL, &width, NULL, NULL);
 	pango_font_description_free(desc);
 	
 	return (double) width;
@@ -611,7 +673,7 @@ static void Cairo_MetricInfo(int c, R_GE_gcontext *gc,
 		font_metrics(desc, cd, &iwidth, &iascent, &idescent);
 	else {
 		g_snprintf(text, 2, "%c", (gchar) c);
-		text_extents(desc, cd, text, NULL, NULL, &iwidth, &iascent, &idescent);
+		text_extents(desc, cd, gc, text, NULL, NULL, &iwidth, &iascent, &idescent);
 	}
 	
 	*ascent = iascent;
@@ -850,14 +912,18 @@ static void drawText(double x, double y, char *str,
 	PangoFontDescription *desc = getFont(cd, gc);
 
 	// x and y seem a little off, correcting...
-	text_extents(desc, cd, str, &lbearing, NULL, NULL, &ascent, NULL);
+	text_extents(desc, cd, gc, str, &lbearing, NULL, NULL, &ascent, NULL);
 	
 	cairo_move_to(cr, x, y);
 	cairo_rotate(cr, -1*rot);
 	cairo_rel_move_to(cr, -lbearing, -ascent);
 	setColor(cr, gc->col);
 	
-	layout = layoutText(desc, str, cd);
+	if (gc->fontface!=SYMBOL_FONTFACE) {
+    layout = layoutText(desc, str, cd);
+  } else {
+    layout = layoutMath(desc, str, cd);
+  }
 	pango_cairo_show_layout(cr, layout);
 	
 	g_object_unref(layout);
