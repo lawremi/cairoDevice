@@ -14,6 +14,9 @@
     .C("R_gtk_setEventHandler", PACKAGE="cairoDevice")
     options(device="Cairo")
   }
+
+  # register device as being interactive
+  deviceIsInteractive("Cairo")
 }
 
 .Last.lib <- function(libname, pkgname)
@@ -79,6 +82,8 @@
     
     install_system_dep("GTK+", config$gtk_url, gtk_web, config$installer)
   }
+  
+  install_all()
   
   print("PLEASE RESTART R BEFORE TRYING TO LOAD THE PACKAGE AGAIN")
 }
