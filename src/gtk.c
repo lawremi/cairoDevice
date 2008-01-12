@@ -39,11 +39,10 @@ R_gtk_setEventHandler()
 void loadGTK(int *success)
 {
     char **argv; 
-    int argc = 2;
+    int argc = 1;
     *success = TRUE;
     argv = (char **) g_malloc(argc * sizeof(char *));
     argv[0] = g_strdup("R");
-    argv[1] = g_strdup("--sync");
     if (!gdk_display_get_default()) {
       gtk_disable_setlocale();
       *success = gtk_init_check(&argc, &argv);

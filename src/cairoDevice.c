@@ -113,7 +113,7 @@ static gboolean initDevice(NewDevDesc *dd)
   cd = (CairoDesc *) dd->deviceSpecific;
 	
   Cairo_Size(&left, &right, &bottom, &top, dd);
-  //g_debug("%f %f %f %f" , left, right, bottom, top);
+  /*g_debug("%f %f %f %f" , left, right, bottom, top);*/
   dd->left = left;
   cd->width = dd->right = right;
   cd->height = dd->bottom = bottom;
@@ -125,14 +125,14 @@ static gboolean initDevice(NewDevDesc *dd)
     gdk_window_set_cursor(cd->drawing->window, cursor);
     gdk_cursor_unref(cursor);
   }
-	
+  
   if(cd->cr) {
     cairo_show_page(cd->cr);
     cairo_destroy(cd->cr);
   }
   if(cd->pixmap && cd->drawing)
     g_object_unref(cd->pixmap);
-	
+  
   /* create pixmap and cairo context for drawing, save default state */
   if(right > 0 && bottom > 0) {
     if (cd->drawing)
@@ -140,7 +140,7 @@ static gboolean initDevice(NewDevDesc *dd)
     if (cd->surface)
       cd->cr = cairo_create(cd->surface);
     else cd->cr = gdk_cairo_create(cd->pixmap);
-    //cairo_set_antialias(cd->cr, CAIRO_ANTIALIAS_NONE);
+  //cairo_set_antialias(cd->cr, CAIRO_ANTIALIAS_NONE);
     //cd->pango = pango_cairo_font_map_create_context(
     //				PANGO_CAIRO_FONT_MAP(pango_cairo_font_map_get_default()));
     //pango_cairo_context_set_resolution(cd->pango, 84);
@@ -391,7 +391,7 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
     cd->surface = surface;
     return(TRUE);
   }
-  
+
   cd->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_resizable(GTK_WINDOW(cd->window), TRUE);
   gtk_window_set_default_size(GTK_WINDOW(cd->window), 
@@ -406,14 +406,14 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
 	
   /* place and realize the drawing area */
   gtk_container_add(GTK_CONTAINER(cd->window), cd->drawing);
-	
+
   /* connect to signal handlers, etc */
   setupWidget(cd->drawing, dd);
   g_signal_connect(G_OBJECT(cd->window), "delete_event",
                    G_CALLBACK(delete_event), dd);
   g_signal_connect(G_OBJECT(cd->window), "key_press_event", 
                    G_CALLBACK(key_press_event), dd);
-	
+  
   gtk_widget_show_all(cd->window);
   
   return(TRUE);
@@ -716,7 +716,7 @@ static void Cairo_Size(double *left, double *right, double *bottom, double *top,
     if (GTK_WIDGET_MAPPED(cd->drawing)) {
       width = cd->drawing->allocation.width;
       height = cd->drawing->allocation.height;
-    } else width = height = 10000; // hack to get R to draw before first exposure
+    } else width = height = 1000; // hack to get R to draw before first exposure
   } else if (GDK_IS_DRAWABLE(cd->pixmap))
     gdk_drawable_get_size(cd->pixmap, &width, &height);
 
@@ -1146,8 +1146,6 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
     return FALSE;
   }
 
-  g_debug("device opened");
-        
   return(configureCairoDevice(dd, cd, width / pixelWidth(), height / pixelHeight(), ps));
 }
 Rboolean
@@ -1195,7 +1193,6 @@ initCairoDevice(double width, double height, double ps, void *data, CairoDeviceC
       PROBLEM  "unable to start device cairo" ERROR;
     }
     cd = (CairoDesc *)dev->deviceSpecific;
-    g_debug("activating device");
     /* wait to do this until the device is realized (if applicable) */
     if (!cd->drawing || GTK_WIDGET_REALIZED(cd->drawing))
       activateDevice(dev);
