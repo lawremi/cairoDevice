@@ -1,9 +1,10 @@
 Package: cairoDevice
-Version: 2.5
-Date:    2007/9/28
+Version: 2.6
+Date:    2008/1/17
 Title: Cairo-based cross-platform antialiased graphics device driver.
 Author:  Michael Lawrence, Lyndon Drake
 Depends: R (>= 2.3.0)
+Imports: grDevices
 Suggests: RGtk2
 SystemRequirements: cairo (>= 1.0)
 Maintainer: Michael Lawrence <lawremi@iastate.edu>
