@@ -14,9 +14,6 @@
 #include <R.h>
 #include <Rversion.h>
 #include <Rinternals.h>
-#include <Rgraphics.h>
-#include <Rdevices.h>
-#include <R_ext/GraphicsDevice.h>
 #include <R_ext/GraphicsEngine.h>
 
 typedef struct _Cairo_locator_info {
@@ -54,7 +51,6 @@ static void Cairo_Clip(double x0, double x1, double y0, double y1,
 		     NewDevDesc *dd);
 static void Cairo_Close(NewDevDesc *dd);
 static void Cairo_Deactivate(NewDevDesc *dd);
-static void Cairo_Hold(NewDevDesc *dd);
 static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd);
 static void Cairo_Line(double x1, double y1, double x2, double y2,
 		     R_GE_gcontext *gc,
@@ -89,10 +85,12 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc*, CairoDesc*, GtkWidget*);
 
 #define SYMBOL_FONTFACE 5
 
-#define BEGIN_SUSPEND_INTERRUPTS
-#define END_SUSPEND_INTERRUPTS
+#ifndef BEGIN_SUSPEND_INTERRUPTS
+# define BEGIN_SUSPEND_INTERRUPTS
+# define END_SUSPEND_INTERRUPTS
+#endif
 
-void	R_WriteConsole(char*, int);
+void	R_WriteConsole(const char*, int);
 
 #if defined(R_VERSION) && R_VERSION < R_Version(2, 6, 0)
 /* R mouse events from non-public Graphics.h */
