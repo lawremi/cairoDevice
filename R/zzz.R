@@ -9,7 +9,7 @@
   
   #library.dynam("cairoDevice", pkgname, libname)
   if (!.C("loadGTK", success = logical(1), PACKAGE="cairoDevice")$success)
-    print("Note: R session is headless; Cairo device not initialized")
+    message("Note: R session is headless; Cairo device not initialized")
   else {
     .C("R_gtk_setEventHandler", PACKAGE="cairoDevice")
     options(device="Cairo")

@@ -1,3 +1,4 @@
+require(RGtk2)
 win <- gtkWindow()
 da <- gtkDrawingArea()
 win$add(da)

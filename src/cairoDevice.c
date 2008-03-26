@@ -9,7 +9,7 @@ static PangoWeight weight[] = { PANGO_WEIGHT_NORMAL, PANGO_WEIGHT_BOLD };
 CairoDesc *createCairoDesc() {
   return(g_new0(CairoDesc, 1));
 }
-void freeCairoDesc(NewDevDesc *dd) {
+void freeCairoDesc(pDevDesc dd) {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   
   if (!cd)
@@ -39,15 +39,14 @@ void freeCairoDesc(NewDevDesc *dd) {
   g_free(cd);
 }
 
-static void activateDevice(NewDevDesc *dev)
+static void activateDevice(pDevDesc dev)
 {
-  GEDevDesc *dd;
+  pGEDevDesc gdd;
   CairoDesc *cd = (CairoDesc *)dev->deviceSpecific;
   GObject *obj = cd->drawing ? G_OBJECT(cd->drawing) : G_OBJECT(cd->pixmap);
-  gsetVar(install(".Device"), mkString("Cairo"), R_NilValue);
-  dd = GEcreateDevDesc(dev);
-  GEaddDevice(dd);
-  GEinitDisplayList(dd);
+
+  gdd = GEcreateDevDesc(dev);
+  GEaddDevice2(gdd, "Cairo");
   if (obj) {
     SEXP devnum = ScalarInteger(ndevNumber(dev) + 1);
     R_PreserveObject(devnum);
@@ -89,7 +88,7 @@ static PangoFontDescription *getBaseFont(CairoDesc *cd)
   return(pango_font_description_from_string("Verdana"));
 }
 
-static void blank(NewDevDesc *dd) {
+static void blank(pDevDesc dd) {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   cairo_t *cr = cd->cr;
   gint width = cd->width, height = cd->height;
@@ -103,7 +102,7 @@ static void blank(NewDevDesc *dd) {
     gtk_widget_queue_draw(cd->drawing);
 }
 
-static gboolean initDevice(NewDevDesc *dd)
+static gboolean initDevice(pDevDesc dd)
 {
   CairoDesc *cd;
   GdkCursor *cursor;
@@ -150,18 +149,18 @@ static gboolean initDevice(NewDevDesc *dd)
   return FALSE;
 }
 
-static void resize(NewDevDesc *dd)
+static void resize(pDevDesc dd)
 {
     GEplayDisplayList(desc2GEDesc(dd));
 }
 
-static gboolean realize_event(GtkWidget *widget, NewDevDesc *dd)
+static gboolean realize_event(GtkWidget *widget, pDevDesc dd)
 {
   g_return_val_if_fail(dd != NULL, FALSE);
   initDevice(dd);
   return(FALSE);
 }
-static gboolean realize_embedded(GtkWidget *widget, NewDevDesc *dd)
+static gboolean realize_embedded(GtkWidget *widget, pDevDesc dd)
 { /* different from above in that embedded device needs to be activated,
      since it wasn't when the device was created */
   g_return_val_if_fail(dd != NULL, FALSE);
@@ -170,7 +169,7 @@ static gboolean realize_embedded(GtkWidget *widget, NewDevDesc *dd)
   return(FALSE);
 }
 
-static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *dd)
+static gint expose_event(GtkWidget *widget, GdkEventExpose *event, pDevDesc dd)
 {
   CairoDesc *cd;
     
@@ -194,7 +193,7 @@ static gint expose_event(GtkWidget *widget, GdkEventExpose *event, NewDevDesc *d
   return FALSE;
 }
 
-static void event_finish(NewDevDesc *dd)
+static void event_finish(pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   dd->onExit = NULL;
@@ -202,13 +201,13 @@ static void event_finish(NewDevDesc *dd)
   cd->event->active = FALSE;
   cd->event = NULL;
 }
-static void event_maybe_finish(NewDevDesc *dd)
+static void event_maybe_finish(pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (cd->event->result && cd->event->result != R_NilValue)
     event_finish(dd);
 }
-static void CairoEvent_onExit(NewDevDesc *dd)
+static void CairoEvent_onExit(pDevDesc dd)
 {
   event_finish(dd);
 }
@@ -217,7 +216,7 @@ static void CairoEvent_onExit(NewDevDesc *dd)
 #define R_BUTTON(button) pow(2, (button) - 1)
 #define R_BUTTONS(state) (state) & (GDK_BUTTON1_MASK | GDK_BUTTON2_MASK | GDK_BUTTON3_MASK) >> 8
 
-static gboolean button_press_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
+static gboolean button_press_event(GtkWidget *widget, GdkEventButton *event, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (dd->gettingEvent) {
@@ -228,7 +227,7 @@ static gboolean button_press_event(GtkWidget *widget, GdkEventButton *event, New
   return(FALSE);
 }
 
-static gboolean button_release_event(GtkWidget *widget, GdkEventButton *event, NewDevDesc *dd)
+static gboolean button_release_event(GtkWidget *widget, GdkEventButton *event, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (dd->gettingEvent) {
@@ -239,7 +238,7 @@ static gboolean button_release_event(GtkWidget *widget, GdkEventButton *event, N
   return(FALSE);
 }
 
-static gboolean motion_notify_event(GtkWidget *widget, GdkEventMotion *event, NewDevDesc *dd)
+static gboolean motion_notify_event(GtkWidget *widget, GdkEventMotion *event, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (dd->gettingEvent) {
@@ -250,7 +249,7 @@ static gboolean motion_notify_event(GtkWidget *widget, GdkEventMotion *event, Ne
   return(FALSE);
 }
 
-static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, NewDevDesc *dd)
+static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (dd->gettingEvent) {
@@ -262,7 +261,7 @@ static gboolean key_press_event(GtkWidget *widget, GdkEventKey *event, NewDevDes
 
 static SEXP Cairo_GetEvent(SEXP rho, const char *prompt)
 {
-  GEDevDesc *dd = GEcurrentDevice();
+  pGEDevDesc dd = GEcurrentDevice();
   CairoDesc *cd = (CairoDesc *) dd->dev->deviceSpecific;
   CairoEvent *event = g_new0(CairoEvent, 1);
   SEXP result = R_NilValue;
@@ -292,12 +291,12 @@ static SEXP Cairo_GetEvent(SEXP rho, const char *prompt)
   return result;
 }
 
-static void kill_cairo(NewDevDesc *dd)
+static void kill_cairo(pDevDesc dd)
 {
     GEkillDevice(desc2GEDesc(dd));
 }
 
-static void unrealize_cb(GtkWidget *widget, NewDevDesc *dd) {
+static void unrealize_cb(GtkWidget *widget, pDevDesc dd) {
   g_return_if_fail(dd != NULL);
   if (dd->deviceSpecific) { /* make sure not called from freeCairoDesc */
     /* don't try to destroy the widget, since it's already being destroyed */
@@ -305,14 +304,14 @@ static void unrealize_cb(GtkWidget *widget, NewDevDesc *dd) {
     kill_cairo(dd);
   }
 }
-static gint delete_event(GtkWidget *widget, GdkEvent *event, NewDevDesc *dd)
+static gint delete_event(GtkWidget *widget, GdkEvent *event, pDevDesc dd)
 {
   g_return_val_if_fail(dd != NULL, FALSE);
   kill_cairo(dd);
   return TRUE;
 }
 
-static void setupWidget(GtkWidget *drawing, NewDevDesc *dd)
+static void setupWidget(GtkWidget *drawing, pDevDesc dd)
 {
   gtk_widget_add_events(drawing, GDK_EXPOSURE_MASK | GDK_BUTTON_PRESS_MASK |
                         GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK);
@@ -325,7 +324,7 @@ static void setupWidget(GtkWidget *drawing, NewDevDesc *dd)
                    G_CALLBACK(button_press_event), dd);
 }
 
-static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *drawing)
+static Rboolean Cairo_OpenEmbedded(pDevDesc dd, CairoDesc *cd, GtkWidget *drawing)
 {
   dd->deviceSpecific = cd;
   cd->drawing = drawing;
@@ -339,7 +338,7 @@ static Rboolean Cairo_OpenEmbedded(NewDevDesc *dd, CairoDesc *cd, GtkWidget *dra
   g_signal_connect(G_OBJECT(drawing), "unrealize", G_CALLBACK(unrealize_cb), dd);
   return(TRUE);
 }
-static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *drawing)
+static Rboolean Cairo_OpenOffscreen(pDevDesc dd, CairoDesc *cd, GdkDrawable *drawing)
 {
   dd->deviceSpecific = cd;
   cd->pixmap = drawing;
@@ -348,7 +347,7 @@ static Rboolean Cairo_OpenOffscreen(NewDevDesc *dd, CairoDesc *cd, GdkDrawable *
   initDevice(dd);		 
   return(TRUE);
 }
-static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h, 
+static Rboolean Cairo_Open(pDevDesc dd, CairoDesc *cd,	double w, double h, 
                            const gchar **surface_info)
 {	
   dd->deviceSpecific = cd;
@@ -417,7 +416,7 @@ static Rboolean Cairo_Open(NewDevDesc *dd, CairoDesc *cd,	double w, double h,
   return(TRUE);
 }
 
-static PangoFontDescription *getFont(CairoDesc *cd, R_GE_gcontext *gc)
+static PangoFontDescription *getFont(CairoDesc *cd, const pGEcontext gc)
 {
   PangoFontDescription *fontdesc, *basedesc;
   gint size, face = gc->fontface;
@@ -467,7 +466,7 @@ static PangoLayout *layoutText(PangoFontDescription *desc, const char *str,
 }
 
 static void
-text_extents(PangoFontDescription *desc, CairoDesc *cd, R_GE_gcontext *gc, 
+text_extents(PangoFontDescription *desc, CairoDesc *cd, const pGEcontext gc, 
              const gchar *text,
 	     gint *lbearing, gint *rbearing, 
 	     gint *width, gint *ascent, gint *descent)
@@ -514,7 +513,7 @@ static void setColor(cairo_t *cr, int color)
 }
 
 /* set the line type */
-static void setLineType(cairo_t *cr, R_GE_gcontext *gc)
+static void setLineType(cairo_t *cr, const pGEcontext gc)
 {
   cairo_line_cap_t cap = CAIRO_LINE_CAP_ROUND;
   cairo_line_join_t join = CAIRO_LINE_JOIN_ROUND;
@@ -562,7 +561,7 @@ static void setLineType(cairo_t *cr, R_GE_gcontext *gc)
   cairo_set_dash(cr, dashes, i, 0);
 }
 
-static void drawShape(cairo_t *cr, R_GE_gcontext *gc)
+static void drawShape(cairo_t *cr, const pGEcontext gc)
 {
   if (gc->fill != NA_INTEGER) {
     setColor(cr, gc->fill);
@@ -576,13 +575,13 @@ static void drawShape(cairo_t *cr, R_GE_gcontext *gc)
 }
 
 static void drawRect(cairo_t *cr, double x0, double y0, double x1, double y1, 
-                     R_GE_gcontext *gc) 
+                     const pGEcontext gc) 
 {
   cairo_rectangle(cr, x0, y0, x1 - x0, y1 - y0);
   drawShape(cr, gc);
 }
 
-static double Cairo_StrWidth(char *str, R_GE_gcontext *gc, NewDevDesc *dd)
+static double Cairo_StrWidth(const char *str, const pGEcontext gc, pDevDesc dd)
 {
   gint width;
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
@@ -594,10 +593,10 @@ static double Cairo_StrWidth(char *str, R_GE_gcontext *gc, NewDevDesc *dd)
   return (double) width;
 }
 
-static void Cairo_MetricInfo(int c, R_GE_gcontext *gc,
-                             double* ascent, double* descent, double* width, NewDevDesc *dd)
+static void Cairo_MetricInfo(int c, const pGEcontext gc,
+                             double* ascent, double* descent, double* width, pDevDesc dd)
 {
-    gchar text[16], s[2];
+  gchar text[16];
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   gint iascent, idescent, iwidth;
   int Unicode = mbcslocale;
@@ -609,10 +608,7 @@ static void Cairo_MetricInfo(int c, R_GE_gcontext *gc,
   else {
       if(c < 0) {c = -c; Unicode = 1;} 
       
-      if (gc->fontface == 5) {
-	  g_snprintf(s, 2, "%c", (gchar) c);
-	  AdobeSymbol2utf8(text, s, 16);
-      } else if(Unicode || c >= 128)
+      if(Unicode || c >= 128)
 	  Rf_ucstoutf8(text, c);
       else
 	  g_snprintf(text, 2, "%c", (gchar) c);
@@ -628,7 +624,7 @@ static void Cairo_MetricInfo(int c, R_GE_gcontext *gc,
   pango_font_description_free(desc);
 }
 
-static void Cairo_Clip(double x0, double x1, double y0, double y1, NewDevDesc *dd)
+static void Cairo_Clip(double x0, double x1, double y0, double y1, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   gint cx, cy, cw, ch;
@@ -648,7 +644,7 @@ static void Cairo_Clip(double x0, double x1, double y0, double y1, NewDevDesc *d
 }
 
 static void Cairo_Size(double *left, double *right, double *bottom, double *top,
-                       NewDevDesc *dd)
+                       pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   gint width = cd->width, height = cd->height;
@@ -670,7 +666,7 @@ static void Cairo_Size(double *left, double *right, double *bottom, double *top,
 }
 
 /* clear the drawing area */
-static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
+static void Cairo_NewPage(const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = dd->deviceSpecific;
   gint width = cd->width, height = cd->height;
@@ -689,7 +685,7 @@ static void Cairo_NewPage(R_GE_gcontext *gc, NewDevDesc *dd)
 
 /** kill off the window etc
  */
-static void Cairo_Close(NewDevDesc *dd)
+static void Cairo_Close(pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   if (dd->onExit)
@@ -703,7 +699,7 @@ static void Cairo_Close(NewDevDesc *dd)
 #define title_text_active "R graphics device %d - Active"
 
 void
-setActive(NewDevDesc *dd, gboolean active)
+setActive(pDevDesc dd, gboolean active)
 {
   CairoDesc *cd;
   gint devnum;
@@ -726,18 +722,18 @@ setActive(NewDevDesc *dd, gboolean active)
   g_free(title_text);
 }
 
-static void Cairo_Activate(NewDevDesc *dd)
+static void Cairo_Activate(pDevDesc dd)
 {
   setActive(dd, TRUE);
 }
 
-static void Cairo_Deactivate(NewDevDesc *dd)
+static void Cairo_Deactivate(pDevDesc dd)
 {
   setActive(dd, FALSE);
 }	
 
 static void Cairo_Rect(double x0, double y0, double x1, double y1,
-                       R_GE_gcontext *gc, NewDevDesc *dd)
+                       const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
@@ -749,7 +745,7 @@ static void Cairo_Rect(double x0, double y0, double x1, double y1,
   cairo_restore(cd->cr);
 }
 
-static void drawCircle(cairo_t *cr, double x, double y, double r, R_GE_gcontext *gc)
+static void drawCircle(cairo_t *cr, double x, double y, double r, const pGEcontext gc)
 {
   cairo_move_to(cr, x+r, y);
   cairo_translate(cr, x, y);
@@ -759,7 +755,7 @@ static void drawCircle(cairo_t *cr, double x, double y, double r, R_GE_gcontext 
 }
 
 static void Cairo_Circle(double x, double y, double r,
-                         R_GE_gcontext *gc, NewDevDesc *dd)
+                         const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   
@@ -772,7 +768,7 @@ static void Cairo_Circle(double x, double y, double r,
 }
 
 static void drawLine(cairo_t *cr, double x1, double y1, double x2, double y2,
-                     R_GE_gcontext *gc)
+                     const pGEcontext gc)
 {
   cairo_move_to(cr, x1, y1);
   cairo_line_to(cr, x2, y2);
@@ -783,7 +779,7 @@ static void drawLine(cairo_t *cr, double x1, double y1, double x2, double y2,
 }
 
 static void Cairo_Line(double x1, double y1, double x2, double y2,
-                       R_GE_gcontext *gc, NewDevDesc *dd)
+                       const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   //g_debug("line");
@@ -804,7 +800,7 @@ static void polypath(cairo_t *cr, int n, double *x, double *y)
     cairo_line_to(cr, x[i], y[i]);
 }
 
-static void drawPolyline(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext *gc)
+static void drawPolyline(cairo_t *cr, int n, double *x, double *y, const pGEcontext gc)
 {
   polypath(cr, n, x, y);
   setColor(cr, gc->col);
@@ -813,7 +809,7 @@ static void drawPolyline(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext
 }
 
 static void Cairo_Polyline(int n, double *x, double *y, 
-                           R_GE_gcontext *gc, NewDevDesc *dd)
+                           const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   //g_debug("polyline");
@@ -825,7 +821,7 @@ static void Cairo_Polyline(int n, double *x, double *y,
   cairo_restore(cd->cr);
 }
 
-static void drawPolygon(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext *gc)
+static void drawPolygon(cairo_t *cr, int n, double *x, double *y, const pGEcontext gc)
 {
   polypath(cr, n, x, y);
   cairo_close_path(cr);
@@ -833,7 +829,7 @@ static void drawPolygon(cairo_t *cr, int n, double *x, double *y, R_GE_gcontext 
 }
 
 static void Cairo_Polygon(int n, double *x, double *y, 
-                          R_GE_gcontext *gc, NewDevDesc *dd)
+                          const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
@@ -845,8 +841,8 @@ static void Cairo_Polygon(int n, double *x, double *y,
   cairo_restore(cd->cr);
 }
 
-static void drawText(double x, double y, char *str, 
-		     double rot, double hadj, CairoDesc *cd, R_GE_gcontext *gc)
+static void drawText(double x, double y, const char *str, 
+		     double rot, double hadj, CairoDesc *cd, const pGEcontext gc)
 {
   PangoLayout *layout;
   gint ascent, lbearing;
@@ -869,8 +865,8 @@ static void drawText(double x, double y, char *str,
   pango_font_description_free(desc);
 }
 
-static void Cairo_Text(double x, double y, char *str, 
-                       double rot, double hadj, R_GE_gcontext *gc, NewDevDesc *dd)
+static void Cairo_Text(double x, double y, const char *str, 
+                       double rot, double hadj, const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   double rrot = DEG2RAD * rot;
@@ -882,7 +878,7 @@ static void Cairo_Text(double x, double y, char *str,
   cairo_restore(cd->cr);
 }
 
-static void locator_finish(NewDevDesc *dd)
+static void locator_finish(pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   /* clean up handler */
@@ -894,7 +890,7 @@ static void locator_finish(NewDevDesc *dd)
 
 static void locator_button_press(GtkWidget *widget,
 				 GdkEventButton *event,
-				 NewDevDesc *dd)
+				 pDevDesc dd)
 {
   CairoLocator *info = ((CairoDesc *) dd->deviceSpecific)->locator;
 
@@ -908,12 +904,12 @@ static void locator_button_press(GtkWidget *widget,
   locator_finish(dd);
 }
 
-static void CairoLocator_onExit(NewDevDesc *dd)
+static void CairoLocator_onExit(pDevDesc dd)
 {
   locator_finish(dd);
 }
 
-static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
+static Rboolean Cairo_Locator(double *x, double *y, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
   CairoLocator *info;
@@ -958,7 +954,7 @@ static Rboolean Cairo_Locator(double *x, double *y, NewDevDesc *dd)
   return FALSE;
 }
 
-static void Cairo_Mode(gint mode, NewDevDesc *dd)
+static void Cairo_Mode(gint mode, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
@@ -971,7 +967,7 @@ static void Cairo_Mode(gint mode, NewDevDesc *dd)
 }
 
 Rboolean
-configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height, double ps)
+configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, double ps)
 {
   gint ascent, descent, cw;
   PangoFont *success;
@@ -1045,10 +1041,6 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
   dd->ipr[1] = pixelHeight();
 
   /* device capabilities */
-  dd->canResizePlot = TRUE;
-  dd->canChangeFont = TRUE;
-  dd->canRotateText = TRUE;
-  dd->canResizeText = TRUE;
   dd->canClip = TRUE;
   dd->canHAdj = 0; // maybe 1 or 2? 
   dd->canChangeGamma = FALSE; // not yet
@@ -1068,7 +1060,7 @@ configureCairoDevice(NewDevDesc *dd, CairoDesc *cd, double width, double height,
 }
 
 Rboolean
-createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data) {
+createCairoDevice(pDevDesc dd, double width, double height, double ps, void *data) {
   /* device driver start */
 	
   CairoDesc *cd;
@@ -1085,7 +1077,7 @@ createCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *
   return(configureCairoDevice(dd, cd, width / pixelWidth(), height / pixelHeight(), ps));
 }
 Rboolean
-asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data)
+asCairoDevice(pDevDesc dd, double width, double height, double ps, void *data)
 {
   CairoDesc *cd;
   gdouble left, right, bottom, top;
@@ -1108,22 +1100,21 @@ asCairoDevice(NewDevDesc *dd, double width, double height, double ps, void *data
   return(configureCairoDevice(dd, cd, right, bottom, ps));
 }
 
-typedef Rboolean (*CairoDeviceCreateFun)(NewDevDesc *, double width, 
+typedef Rboolean (*CairoDeviceCreateFun)(pDevDesc , double width, 
                                          double height, double pointsize, void *data);
 
-static  NewDevDesc *
+static  pDevDesc 
 initCairoDevice(double width, double height, double ps, void *data, CairoDeviceCreateFun init_fun)
 {
-  NewDevDesc *dev;
+  pDevDesc dev;
   CairoDesc *cd;
 
+  R_GE_checkVersionOrDie(R_GE_version);
   R_CheckDeviceAvailable();
   BEGIN_SUSPEND_INTERRUPTS {
     /* Allocate and initialize the device driver data */
-    if (!(dev = (NewDevDesc *) calloc(1, sizeof(NewDevDesc))))
+    if (!(dev = (pDevDesc) calloc(1, sizeof(NewDevDesc))))
       return NULL;
-    /* Do this for early redraw attempts */
-    dev->displayList = R_NilValue;
     if (! init_fun (dev, width, height, ps, data)) {
       free(dev);
       PROBLEM  "unable to start device cairo" ERROR;
