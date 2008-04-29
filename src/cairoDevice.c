@@ -88,20 +88,6 @@ static PangoFontDescription *getBaseFont(CairoDesc *cd)
   return(pango_font_description_from_string("Verdana"));
 }
 
-static void blank(pDevDesc dd) {
-  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-  cairo_t *cr = cd->cr;
-  gint width = cd->width, height = cd->height;
-  
-  if (GDK_IS_DRAWABLE(cd->pixmap))
-    gdk_drawable_get_size(cd->pixmap, &width, &height);
-  cairo_set_source_rgb(cr, 1, 1, 1);
-  cairo_rectangle(cr, 0, 0, (gdouble)width, (gdouble)height);
-  cairo_fill(cr);
-  if (cd->drawing)
-    gtk_widget_queue_draw(cd->drawing);
-}
-
 static gboolean initDevice(pDevDesc dd)
 {
   CairoDesc *cd;
@@ -669,18 +655,21 @@ static void Cairo_Size(double *left, double *right, double *bottom, double *top,
 static void Cairo_NewPage(const pGEcontext gc, pDevDesc dd)
 {
   CairoDesc *cd = dd->deviceSpecific;
-  gint width = cd->width, height = cd->height;
-	
+  cairo_t *cr;
+  
   initDevice(dd);
-  
-  if (!R_OPAQUE(gc->fill)) {
-    blank(dd);
-  }
-	
-  if (GDK_IS_DRAWABLE(cd->pixmap))
-    gdk_drawable_get_size(cd->pixmap, &width, &height);
-  
-  drawRect(cd->cr, 0, 0, width, height, gc);
+
+  cr = cd->cr;
+
+  if (!R_OPAQUE(gc->fill))
+    cairo_set_source_rgb(cr, 1, 1, 1);
+  else setColor(cr, gc->fill);
+
+  cairo_new_path(cr);
+  cairo_paint(cr);
+
+  if (cd->drawing)
+    gtk_widget_queue_draw(cd->drawing);
 }
 
 /** kill off the window etc
