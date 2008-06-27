@@ -436,9 +436,10 @@ static PangoLayout *layoutText(PangoFontDescription *desc, const char *str,
 	
   //pango_cairo_update_context(cd->cr, cd->pango);
   //layout = pango_layout_new(cd->pango);
-  if (cd->drawing)
+  /*if (cd->drawing)
     layout = gtk_widget_create_pango_layout(cd->drawing, NULL);
-  else layout = pango_layout_new(gdk_pango_context_get());
+    else layout = pango_layout_new(gdk_pango_context_get());*/
+  layout = pango_cairo_create_layout(cd->cr);
   pango_layout_set_font_description(layout, desc);
   pango_layout_set_text(layout, str, -1);
   return(layout);
@@ -829,20 +830,24 @@ static void drawText(double x, double y, const char *str,
   PangoLayout *layout;
   gint ascent, lbearing;
   cairo_t *cr = cd->cr;
-	
+
   PangoFontDescription *desc = getFont(cd, gc);
 
   // x and y seem a little off, correcting...
+  cairo_save(cd->cr);
+  
+  layout = layoutText(desc, str, cd);
+  
   text_extents(desc, cd, gc, str, &lbearing, NULL, NULL, &ascent, NULL);
-	
+
   cairo_move_to(cr, x, y);
   cairo_rotate(cr, -1*rot);
   cairo_rel_move_to(cr, -lbearing, -ascent);
   setColor(cr, gc->col);
 
-  layout = layoutText(desc, str, cd);
   pango_cairo_show_layout(cr, layout);
-	
+  
+  cairo_restore(cd->cr);
   g_object_unref(layout);
   pango_font_description_free(desc);
 }
