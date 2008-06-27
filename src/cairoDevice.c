@@ -404,36 +404,29 @@ static Rboolean Cairo_Open(pDevDesc dd, CairoDesc *cd,	double w, double h,
 
 static PangoFontDescription *getFont(CairoDesc *cd, const pGEcontext gc)
 {
-  PangoFontDescription *fontdesc, *basedesc;
-  gint size, face = gc->fontface;
-    
-  if (face < 1 || face > 5)
-    face = 1;
+  PangoFontDescription *fontdesc;
+  gint face = gc->fontface;
+  double size = gc->cex * gc->ps;
 
-  size = gc->cex * gc->ps + 0.5;
-	
-  basedesc = getBaseFont(cd);
+  if (face < 1 || face > 5) face = 1;
+
   fontdesc = pango_font_description_new();
-  if (face == SYMBOL_FONTFACE) {
+  if (face == 5)
     pango_font_description_set_family(fontdesc, "symbol");
-  } else {
-    if (strlen(gc->fontfamily))
-      pango_font_description_set_family(fontdesc, gc->fontfamily);
-    pango_font_description_set_weight(fontdesc, weight[(face-1)%2]);
-    pango_font_description_set_style(fontdesc, slant[((face-1)/2)%2]);
+  else {
+    char *fm = gc->fontfamily;
+    /*if(!strcmp(fm, "mono")) fm = "courier";
+    else if(!strcmp(fm, "serif")) fm = "times";
+    else if(!strcmp(fm, "sans")) fm = "helvetica";*/
+    pango_font_description_set_family(fontdesc, fm[0] ? fm : "Verdana");
+    if(face == 2 || face == 4)
+      pango_font_description_set_weight(fontdesc, PANGO_WEIGHT_BOLD);
+    if(face == 3 || face == 4)
+      pango_font_description_set_style(fontdesc, PANGO_STYLE_OBLIQUE);
   }
   pango_font_description_set_size(fontdesc, PANGO_SCALE * size);
-  pango_font_description_merge(fontdesc, basedesc, FALSE);
-	
-  if (!loadFont(fontdesc, cd)) {
-    char *strdesc = pango_font_description_to_string(fontdesc);
-    fprintf(stderr, "Could not find font '%s', falling back to base font!\n", strdesc);
-    g_free(strdesc);
-    pango_font_description_free(fontdesc);
-    fontdesc = basedesc;
-  } else pango_font_description_free(basedesc);
-	
-  return(fontdesc);
+
+  return fontdesc;
 }
 
 static PangoLayout *layoutText(PangoFontDescription *desc, const char *str, 
@@ -846,7 +839,7 @@ static void drawText(double x, double y, const char *str,
   cairo_rotate(cr, -1*rot);
   cairo_rel_move_to(cr, -lbearing, -ascent);
   setColor(cr, gc->col);
-	
+
   layout = layoutText(desc, str, cd);
   pango_cairo_show_layout(cr, layout);
 	
