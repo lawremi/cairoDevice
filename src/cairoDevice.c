@@ -449,26 +449,40 @@ static void
 text_extents(PangoFontDescription *desc, CairoDesc *cd, const pGEcontext gc, 
              const gchar *text,
 	     gint *lbearing, gint *rbearing, 
-	     gint *width, gint *ascent, gint *descent)
+	     gint *width, gint *ascent, gint *descent, gboolean ink)
 {
   PangoLayout *layout;
-  PangoRectangle rect;
+  PangoRectangle rect, irect;
 	
   layout = layoutText(desc, text, cd);
   
-  pango_layout_line_get_pixel_extents(pango_layout_get_line(layout, 0), NULL, &rect);
+  pango_layout_line_get_pixel_extents(pango_layout_get_line(layout, 0), &irect,
+                                      &rect);
 
-  if(ascent)
-    *ascent = PANGO_ASCENT(rect);
-  if(descent)
-    *descent = PANGO_DESCENT(rect);
-  if(width)
-    *width = rect.width;
-  if(lbearing)
-    *lbearing = PANGO_LBEARING(rect);
-  if(rbearing)
-    *rbearing = PANGO_RBEARING(rect);
-	
+  if (!ink) {
+    if(ascent)
+      *ascent = PANGO_ASCENT(rect);
+    if(descent)
+      *descent = PANGO_DESCENT(rect);
+    if(width)
+      *width = rect.width;
+    if(lbearing)
+      *lbearing = PANGO_LBEARING(rect);
+    if(rbearing)
+      *rbearing = PANGO_RBEARING(rect);
+  } else {
+    if(ascent)
+      *ascent = PANGO_ASCENT(irect);
+    if(descent)
+      *descent = PANGO_DESCENT(irect);
+    if(width)
+      *width = irect.width;
+    if(lbearing)
+      *lbearing = PANGO_LBEARING(irect);
+    if(rbearing)
+      *rbearing = PANGO_RBEARING(irect);
+  }
+  
   g_object_unref(layout);
 }
 
@@ -567,7 +581,7 @@ static double Cairo_StrWidth(const char *str, const pGEcontext gc, pDevDesc dd)
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
 	
   PangoFontDescription *desc = getFont(cd, gc);
-  text_extents(desc, cd, gc, str, NULL, NULL, &width, NULL, NULL);
+  text_extents(desc, cd, gc, str, NULL, NULL, &width, NULL, NULL, FALSE);
   pango_font_description_free(desc);
 	
   return (double) width;
@@ -585,15 +599,17 @@ static void Cairo_MetricInfo(int c, const pGEcontext gc,
 	
   if (!c) 
     font_metrics(desc, cd, &iwidth, &iascent, &idescent);
-  else {
-      if(c < 0) {c = -c; Unicode = 1;} 
-      
-      if(Unicode || c >= 128)
-	  Rf_ucstoutf8(text, c);
-      else
-	  g_snprintf(text, 2, "%c", (gchar) c);
-      text_extents(desc, cd, gc, text, NULL, NULL, &iwidth, &iascent, &idescent);
-  }
+    else {
+  /*if (!c) c = 77;*/
+  if(c < 0) {c = -c; Unicode = 1;} 
+  
+  if(Unicode || c >= 128)
+    Rf_ucstoutf8(text, c);
+  else
+    g_snprintf(text, 2, "%c", (gchar) c);
+  text_extents(desc, cd, gc, text, NULL, NULL, &iwidth, &iascent, &idescent,
+               TRUE);
+      }
 	
   *ascent = iascent;
   *descent = idescent;
@@ -833,12 +849,9 @@ static void drawText(double x, double y, const char *str,
 
   PangoFontDescription *desc = getFont(cd, gc);
 
-  // x and y seem a little off, correcting...
-  cairo_save(cd->cr);
-  
   layout = layoutText(desc, str, cd);
   
-  text_extents(desc, cd, gc, str, &lbearing, NULL, NULL, &ascent, NULL);
+  text_extents(desc, cd, gc, str, &lbearing, NULL, NULL, &ascent, NULL, FALSE);
 
   cairo_move_to(cr, x, y);
   cairo_rotate(cr, -1*rot);
@@ -847,7 +860,6 @@ static void drawText(double x, double y, const char *str,
 
   pango_cairo_show_layout(cr, layout);
   
-  cairo_restore(cd->cr);
   g_object_unref(layout);
   pango_font_description_free(desc);
 }

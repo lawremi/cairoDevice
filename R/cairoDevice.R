@@ -33,9 +33,7 @@ Cairo_svg <- function(filename, width = 7, height = 7, pointsize = 10)
 
 asCairoDevice <- function(widget, pointsize = 10)
 {
-    if (!require("RGtk2"))
-       stop("asGtkDevice requires the RGtk package")
-    if(!inherits(widget, "GtkDrawingArea") && !inherits(widget, "GdkDrawable")) {
+  if(!inherits(widget, "GtkDrawingArea") && !inherits(widget, "GdkDrawable")) {
         stop("Object being used as a Cairo Device must be a GtkDrawingArea or GdkDrawable")
     }
 
