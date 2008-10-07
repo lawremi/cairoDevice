@@ -1,5 +1,5 @@
 Package: cairoDevice
-Version: 2.9
+Version: 2.9-1
 Date:    2008/10/06
 Title: Cairo-based cross-platform antialiased graphics device driver.
 Author:  Michael Lawrence

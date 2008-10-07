@@ -15,6 +15,12 @@
 #include <Rinternals.h>
 #include <R_ext/GraphicsEngine.h>
 
+/* This is so that cairoDevice builds under R 2.7 and 2.9
+   simultaneously. Remove after R 2.8 is released. */
+#ifndef NewDevDesc
+# define NewDevDesc DevDesc
+#endif
+
 typedef struct _Cairo_locator_info {
     guint x;
     guint y;
