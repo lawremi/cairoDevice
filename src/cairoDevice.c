@@ -24,9 +24,11 @@ void freeCairoDesc(pDevDesc dd) {
   
   if(cd->window)
     gtk_widget_destroy(cd->window);
-  
+
   if(cd->cr) {
-    cairo_show_page(cd->cr);
+    if (!cd->cr_custom)
+      cairo_show_page(cd->cr);
+    else cairo_restore(cd->cr);
     cairo_destroy(cd->cr);
   }
   
@@ -111,8 +113,10 @@ static gboolean initDevice(pDevDesc dd)
   }
   
   if(cd->cr) {
-    cairo_show_page(cd->cr);
-    cairo_destroy(cd->cr);
+    if (!cd->cr_custom) {
+      cairo_show_page(cd->cr);
+      cairo_destroy(cd->cr);
+    } else cairo_restore(cd->cr);
   }
   if(cd->pixmap && cd->drawing)
     g_object_unref(cd->pixmap);
@@ -123,6 +127,8 @@ static gboolean initDevice(pDevDesc dd)
       cd->pixmap = gdk_pixmap_new(cd->drawing->window, right, bottom, -1);
     if (cd->surface)
       cd->cr = cairo_create(cd->surface);
+    else if (cd->cr_custom)
+      cd->cr = cd->cr_custom;
     else cd->cr = gdk_cairo_create(cd->pixmap);
   //cairo_set_antialias(cd->cr, CAIRO_ANTIALIAS_NONE);
     //cd->pango = pango_cairo_font_map_create_context(
@@ -333,6 +339,19 @@ static Rboolean Cairo_OpenOffscreen(pDevDesc dd, CairoDesc *cd, GdkDrawable *dra
   initDevice(dd);		 
   return(TRUE);
 }
+
+static Rboolean Cairo_OpenCustom(pDevDesc dd, CairoDesc *cd, double w, double h,
+                                 cairo_t *cr)
+{
+  dd->deviceSpecific = cd;
+  cd->cr_custom = cairo_reference(cr);
+  cd->width = w;
+  cd->height = h;
+  // initialize
+  initDevice(dd);		 
+  return(TRUE);
+}
+
 static Rboolean Cairo_Open(pDevDesc dd, CairoDesc *cd,	double w, double h, 
                            const gchar **surface_info)
 {	
@@ -840,6 +859,120 @@ static void Cairo_Polygon(int n, double *x, double *y,
   cairo_restore(cd->cr);
 }
 
+/* Adapted from R's modules/X11/cairoX11.c */
+static void Cairo_Raster(unsigned int *raster, int w, int h,
+                         double x, double y, 
+                         double width, double height,
+                         double rot, 
+                         Rboolean interpolate,
+                         const pGEcontext gc, pDevDesc dd)
+{
+  char *vmax = vmaxget();
+  int i;
+  cairo_surface_t *image;
+  unsigned char *imageData;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  
+  imageData = (unsigned char *) R_alloc(4*w*h, sizeof(unsigned char));
+  /* The R ABGR needs to be converted to a Cairo ARGB 
+   * AND values need to by premultiplied by alpha 
+   */
+  for (i=0; i<w*h; i++) {
+    int alpha = R_ALPHA(raster[i]);
+    imageData[i*4 + 3] = alpha;
+    if (alpha < 255) {
+      imageData[i*4 + 2] = R_RED(raster[i]) * alpha / 255;
+      imageData[i*4 + 1] = R_GREEN(raster[i]) * alpha / 255;
+      imageData[i*4 + 0] = R_BLUE(raster[i]) * alpha / 255;
+    } else {
+      imageData[i*4 + 2] = R_RED(raster[i]);
+      imageData[i*4 + 1] = R_GREEN(raster[i]);
+      imageData[i*4 + 0] = R_BLUE(raster[i]);
+    }
+  }
+  image = cairo_image_surface_create_for_data(imageData, 
+                                              CAIRO_FORMAT_ARGB32,
+                                              w, h, 
+                                              4*w);
+
+  cairo_save(cd->cr);
+
+  cairo_translate(cd->cr, x, y);
+  cairo_rotate(cd->cr, -rot*M_PI/180);
+  cairo_scale(cd->cr, width/w, height/h);
+  /* Flip vertical first */
+  cairo_translate(cd->cr, 0, h/2.0);
+  cairo_scale(cd->cr, 1, -1);
+  cairo_translate(cd->cr, 0, -h/2.0);
+
+  cairo_set_source_surface(cd->cr, image, 0, 0);
+
+  /* Use nearest-neighbour filter so that a scaled up image
+   * is "blocky";  alternative is some sort of linear
+   * interpolation, which gives nasty edge-effects
+   */
+  if (!interpolate) {
+    cairo_pattern_set_filter(cairo_get_source(cd->cr), 
+                             CAIRO_FILTER_NEAREST);
+  }
+
+  cairo_paint(cd->cr); 
+
+  cairo_restore(cd->cr);
+  cairo_surface_destroy(image);
+
+  vmaxset(vmax);
+}
+
+static SEXP Cairo_Cap(pDevDesc dd)
+{
+  int i, j, k, nbytes, width, height, size, stride;
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  unsigned char *screenData;
+  SEXP dim, raster = R_NilValue;
+  unsigned int *rint;
+  GdkPixbuf *pixbuf = NULL;
+  
+  if (!cd->pixmap)
+    return raster;
+
+  pixbuf =
+    gdk_pixbuf_get_from_drawable(NULL, cd->pixmap, NULL, 0, 0, 0, 0, -1, -1);
+
+  stride = gdk_pixbuf_get_rowstride(pixbuf);
+  width = gdk_pixbuf_get_width(pixbuf);
+  height = gdk_pixbuf_get_height(pixbuf);
+  screenData = gdk_pixbuf_get_pixels(pixbuf);
+  
+  /* Should not happen */
+  if (gdk_pixbuf_get_colorspace(pixbuf) != GDK_COLORSPACE_RGB ||
+      gdk_pixbuf_get_bits_per_sample(pixbuf) != 8 ||
+      gdk_pixbuf_get_has_alpha(pixbuf)) 
+    return raster;
+  
+  size = width*height;
+  nbytes = stride*height;
+
+  PROTECT(raster = allocVector(INTSXP, size));
+
+  /* Copy each byte of screen to an R matrix. 
+   * The Cairo RGB24 needs to be converted to an R ABGR32 */
+  rint = (unsigned int *) INTEGER(raster);
+  for (i = 0, k = 0; i < nbytes; i += stride)
+    for (j = i; j < i + width*3; j += 3)
+      rint[k++] = 255<<24 | ((screenData[j])<<16 | 
+                             (screenData[j + 1])<<8 |
+                             (screenData[j + 2]));
+  
+  PROTECT(dim = allocVector(INTSXP, 2));
+  INTEGER(dim)[0] = height;
+  INTEGER(dim)[1] = width;
+  setAttrib(raster, R_DimSymbol, dim);
+
+  UNPROTECT(2);
+  return raster;
+}
+
 static void drawText(double x, double y, const char *str, 
 		     double rot, double hadj, CairoDesc *cd, const pGEcontext gc)
 {
@@ -990,6 +1123,8 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
   dd->line = Cairo_Line;
   dd->polyline = Cairo_Polyline;
   dd->polygon = Cairo_Polygon;
+  dd->raster = Cairo_Raster;
+  dd->cap = Cairo_Cap;
   dd->locator = Cairo_Locator;
   dd->mode = Cairo_Mode;
   dd->metricInfo = Cairo_MetricInfo;
@@ -1084,11 +1219,14 @@ asCairoDevice(pDevDesc dd, double width, double height, double ps, void *data)
 
   if(!(cd = createCairoDesc()))
     return FALSE;
-	
-  if (GTK_IS_WIDGET(data))
-    success = Cairo_OpenEmbedded(dd, cd, GTK_WIDGET(data));
-  else success = Cairo_OpenOffscreen(dd, cd, GDK_DRAWABLE(data));
-  
+
+  if (width != -1) { // if width/height specified, we have custom context
+    success = Cairo_OpenCustom(dd, cd, width, height, (cairo_t *)data);
+  } else { // otherwise assume something from GTK
+    if (GTK_IS_WIDGET(data))
+      success = Cairo_OpenEmbedded(dd, cd, GTK_WIDGET(data));
+    else success = Cairo_OpenOffscreen(dd, cd, GDK_DRAWABLE(data));
+  }
   if (!success) {
     freeCairoDesc(dd);
     return FALSE;
@@ -1112,7 +1250,7 @@ initCairoDevice(double width, double height, double ps, void *data, CairoDeviceC
   R_CheckDeviceAvailable();
   BEGIN_SUSPEND_INTERRUPTS {
     /* Allocate and initialize the device driver data */
-    if (!(dev = (pDevDesc) calloc(1, sizeof(NewDevDesc))))
+    if (!(dev = (pDevDesc) calloc(1, sizeof(DevDesc))))
       return NULL;
     if (! init_fun (dev, width, height, ps, data)) {
       free(dev);
@@ -1152,14 +1290,11 @@ do_Cairo(double *in_width, double *in_height, double *in_pointsize, char **surfa
 
 
 SEXP
-do_asCairoDevice(SEXP widget, SEXP pointsize)
+do_asCairoDevice(SEXP widget, SEXP pointsize, SEXP width, SEXP height)
 {
-  void *drawing = R_ExternalPtrAddr(widget);
-  double ps;
-  SEXP ans = Rf_allocVector(LGLSXP, 1);
-
-  ps = REAL(pointsize)[0];
-  LOGICAL(ans)[0] = (initCairoDevice(-1, -1, ps, drawing, asCairoDevice) != NULL);
-
-  return(ans);
+  pDevDesc pd = initCairoDevice(asReal(width), asReal(height),
+                                asReal(pointsize),
+                                R_ExternalPtrAddr(widget),
+                                asCairoDevice);
+  return ScalarLogical(pd != NULL);
 }

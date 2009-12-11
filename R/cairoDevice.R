@@ -31,11 +31,27 @@ Cairo_svg <- function(filename, width = 7, height = 7, pointsize = 10)
   Cairo(width, height, pointsize, "svg", filename)
 }
 
-asCairoDevice <- function(widget, pointsize = 10)
+asCairoDevice <- function(widget, pointsize = 10, width = 500, height = 500)
 {
-  if(!inherits(widget, "GtkDrawingArea") && !inherits(widget, "GdkDrawable")) {
-        stop("Object being used as a Cairo Device must be a GtkDrawingArea or GdkDrawable")
+  w <- -1
+  h <- -1
+  if (inherits(widget, "GtkPrintContext")) {
+    w <- widget$getWidth()
+    h <- widget$getHeight()
+    widget <- widget$getCairoContext()
+  } else if (inherits(widget, "Cairo")) {
+    stopifnot(width >= 0)
+    stopifnot(height >= 0)
+    w <- as.numeric(width)
+    h <- as.numeric(height)
+  } else if (!inherits(widget, "GtkDrawingArea") &&
+             !inherits(widget, "GdkDrawable"))
+    {
+      stop("Object being used as a Cairo Device must be a GtkDrawingArea, ",
+           "GdkDrawable, GtkPrintContext or Cairo context")
     }
-
-    .Call("do_asCairoDevice", widget, as.numeric(pointsize), PACKAGE="cairoDevice")
+  if (!inherits(widget, "Cairo") && (!missing(width) || !missing(height)))
+    stop("'width' and 'height' ignored unless 'widget' is a Cairo context")
+  .Call("do_asCairoDevice", widget, as.numeric(pointsize), w, h,
+        PACKAGE="cairoDevice")
 }

@@ -15,12 +15,6 @@
 #include <Rinternals.h>
 #include <R_ext/GraphicsEngine.h>
 
-/* This is so that cairoDevice builds under R 2.7 and 2.9
-   simultaneously. Remove after R 2.8 is released. */
-#ifndef NewDevDesc
-# define NewDevDesc DevDesc
-#endif
-
 typedef struct _Cairo_locator_info {
     guint x;
     guint y;
@@ -39,7 +33,9 @@ typedef struct {
 	GtkWidget *window;			/* Graphics frame */
 	GtkWidget *drawing;			/* widget to which we are drawing */
 	GdkPixmap *pixmap;			/* off-screen drawable */
-	cairo_t *cr;				/* the cairo context to which we draw */
+	cairo_t *cr;				/* the cairo context
+                                                   to which we draw */
+  cairo_t *cr_custom; /* custom cairo context from R */
   cairo_surface_t *surface; /* if non-NULL we have an alt surface like svg */
   gchar *filename; /* filename for certain Cairo backends */
 	gint width, height; /* width and height of device */
@@ -69,6 +65,14 @@ static void Cairo_NewPage(const pGEcontext gc, pDevDesc dd);
 static void Cairo_Polygon(int n, double *x, double *y, 
 			const pGEcontext gc,
 			pDevDesc dd);
+static SEXP Cairo_Cap(pDevDesc dd);
+static void Cairo_Raster(unsigned int *raster, int w, int h,
+                         double x, double y, 
+                         double width, double height,
+                         double rot, 
+                         Rboolean interpolate,
+                         const pGEcontext gc, pDevDesc dd);
+
 static void Cairo_Polyline(int n, double *x, double *y, 
 			 const pGEcontext gc,
 			 pDevDesc dd);
