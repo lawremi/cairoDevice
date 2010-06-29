@@ -1,12 +1,12 @@
 Package: cairoDevice
-Version: 2.11
-Date:    2009/3/23
+Version: 2.13
+Date:    2010/6/29
 Title: Cairo-based cross-platform antialiased graphics device driver.
 Author:  Michael Lawrence
 Depends: R (>= 2.7.0)
 Imports: grDevices
 SystemRequirements: cairo (>= 1.0)
-Maintainer: Michael Lawrence <mflawren@fhcrc.org>
+Maintainer: Michael Lawrence <michafla@gene.com>
 Description: Cairo/GTK graphics device driver with output to screen, 
   file (png, svg, pdf, and ps) or memory (arbitrary GdkDrawable or Cairo
   context). The screen device may be embedded into RGtk2 interfaces. Supports
