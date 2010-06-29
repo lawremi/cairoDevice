@@ -23,11 +23,13 @@ typedef struct _Cairo_locator_info {
     gboolean active;
 } CairoLocator;
 
+#if R_GE_version < 7
 typedef struct _CairoEvent {
   SEXP rho;
   SEXP result;
   gboolean active;
 } CairoEvent;
+#endif
 
 typedef struct {
 	GtkWidget *window;			/* Graphics frame */
@@ -39,7 +41,9 @@ typedef struct {
   cairo_surface_t *surface; /* if non-NULL we have an alt surface like svg */
   gchar *filename; /* filename for certain Cairo backends */
 	gint width, height; /* width and height of device */
+#if R_GE_version < 7
   CairoEvent *event; /* stores information for 'getGraphicsEvent' support */
+#endif
   CairoLocator *locator; /* stores information for 'locator' support */
 } CairoDesc;
 
