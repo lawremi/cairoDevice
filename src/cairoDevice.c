@@ -960,6 +960,7 @@ static void Cairo_Polygon(int n, double *x, double *y,
   cairo_restore(cd->cr);
 }
 
+#if R_GE_version > 6
 /* Adapted from R's modules/X11/cairoX11.c */
 static void Cairo_Raster(unsigned int *raster, int w, int h,
                          double x, double y, 
@@ -1073,6 +1074,7 @@ static SEXP Cairo_Cap(pDevDesc dd)
   UNPROTECT(2);
   return raster;
 }
+#endif
 
 static void drawText(double x, double y, const char *str, 
 		     double rot, double hadj, CairoDesc *cd, const pGEcontext gc)
@@ -1224,8 +1226,10 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
   dd->line = Cairo_Line;
   dd->polyline = Cairo_Polyline;
   dd->polygon = Cairo_Polygon;
+#if R_GE_version > 6
   dd->raster = Cairo_Raster;
   dd->cap = Cairo_Cap;
+#endif
   dd->locator = Cairo_Locator;
   dd->mode = Cairo_Mode;
   dd->metricInfo = Cairo_MetricInfo;
