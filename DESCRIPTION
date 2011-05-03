@@ -1,6 +1,6 @@
 Package: cairoDevice
-Version: 2.14-2
-Date: 2010/10/05
+Version: 2.15
+Date: 2011/05/03
 Title: Cairo-based cross-platform antialiased graphics device driver.
 Author: Michael Lawrence
 Depends: R (>= 2.12.0)
@@ -13,8 +13,6 @@ Description: Cairo/GTK graphics device driver with output to screen,
         interfaces. Supports all interactive features of other graphics
         devices, including getGraphicsEvent().
 Acknowledgements: Lyndon Drake (based on gtkDevice), Brian Ripley
-        (updates for R 2.7), Mikhail Kondrin (Adobe->UTF8 translation)
+        (updates for R 2.7), Mikhail Kondrin (Adobe->UTF8 translation),
+        Duncan Murdoch (updates for R 2.12)
 License: GPL
-Repository: CRAN
-Date/Publication: 2010-10-05 16:37:22
-Packaged: 2010-11-03 08:49:38 UTC; ripley
