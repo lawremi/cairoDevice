@@ -1178,8 +1178,8 @@ static Rboolean Cairo_Locator(double *x, double *y, pDevDesc dd)
     R_gtk_eventHandler(NULL);
   }
     
-  *x = (double) info->x;
-  *y = (double) info->y;
+  *x = (double) info->x / gResolutionX * POINTS_PER_INCH;
+  *y = (double) info->y / gResolutionY * POINTS_PER_INCH;
   button1 = info->button1;
 
   g_free(info);
