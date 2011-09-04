@@ -7,7 +7,7 @@
 \title{The Cairo Graphics Device}
 \description{Open an R graphics device based on the Cairo vector graphics library}
 \usage{
-  Cairo(width = 7, height = 7, pointsize = 10, surface = "screen", filename = NULL)
+  Cairo(width = 7, height = 7, pointsize = 8, surface = c("screen", "png", "pdf", "ps", "svg"), filename = NULL)
   Cairo_pdf(filename, width = 7, height = 7, pointsize = 10)
   Cairo_ps(filename, width = 7, height = 7, pointsize = 10)
   Cairo_svg(filename, width = 7, height = 7, pointsize = 10)
