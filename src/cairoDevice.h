@@ -32,11 +32,11 @@ typedef struct _CairoEvent {
 #endif
 
 typedef struct {
-	GtkWidget *window;			/* Graphics frame */
-	GtkWidget *drawing;			/* widget to which we are drawing */
-	GdkPixmap *pixmap;			/* off-screen drawable */
-	cairo_t *cr;				/* the cairo context
-                                                   to which we draw */
+  GtkWidget *window;			/* Graphics frame */
+  GtkWidget *drawing;			/* widget to which we are drawing */
+  GdkPixmap *pixmap;			/* off-screen drawable */
+  cairo_t *cr;				/* the cairo context
+                                           to which we draw */
   cairo_t *cr_custom; /* custom cairo context from R */
   cairo_surface_t *surface; /* if non-NULL we have an alt surface like svg */
   gchar *filename; /* filename for certain Cairo backends */
@@ -45,6 +45,7 @@ typedef struct {
   CairoEvent *event; /* stores information for 'getGraphicsEvent' support */
 #endif
   CairoLocator *locator; /* stores information for 'locator' support */
+  int holdlevel; /* apparently we have to track the hold level */
 } CairoDesc;
 
 /* Device driver actions */

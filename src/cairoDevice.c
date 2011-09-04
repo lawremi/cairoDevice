@@ -144,7 +144,7 @@ static gboolean initDevice(pDevDesc dd)
   
   /* set up crosshair cursor */
   if (cd->drawing) {
-    cursor = gdk_cursor_new(GDK_CROSSHAIR);
+    cursor = gdk_cursor_new(CURSOR);
     gdk_window_set_cursor(cd->drawing->window, cursor);
     gdk_cursor_unref(cursor);
   }
@@ -864,6 +864,46 @@ static void Cairo_Rect(double x0, double y0, double x1, double y1,
   cairo_restore(cd->cr);
 }
 
+static void drawPath(cairo_t *cr,
+                     double *x, double *y, 
+                     int npoly, int *nper,
+                     Rboolean winding,
+                     const pGEcontext gc)
+{
+  int i, j, z;
+
+  cairo_new_path(cr);
+  
+  for (i = 0, z = 0; i < npoly; i++) {
+    cairo_move_to(cr, x[z], y[z]);
+    z++;
+    for (j = 1; j < nper[i]; j++, z++) {
+      cairo_line_to(cr, x[z], y[z]);
+    }
+    cairo_close_path(cr);
+  }
+
+  cairo_set_fill_rule(cr, winding ? CAIRO_FILL_RULE_WINDING :
+                      CAIRO_FILL_RULE_EVEN_ODD);
+  
+  drawShape(cr, gc);
+}
+
+static void Cairo_Path(double *x, double *y, 
+                       int npoly, int *nper,
+                       Rboolean winding,
+                       const pGEcontext gc, pDevDesc dd)
+{
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+	
+  g_return_if_fail(cd != NULL);
+  g_return_if_fail(cd->cr != NULL);
+
+  cairo_save(cd->cr);
+  drawPath(cd->cr, x, y, npoly, nper, winding, gc);
+  cairo_restore(cd->cr);
+}
+
 static void drawCircle(cairo_t *cr, double x, double y, double r, const pGEcontext gc)
 {
   cairo_move_to(cr, x+r, y);
@@ -1151,7 +1191,10 @@ static Rboolean Cairo_Locator(double *x, double *y, pDevDesc dd)
   gboolean button1;
     
   g_return_val_if_fail(GTK_IS_DRAWING_AREA(cd->drawing), FALSE);
-    
+  
+  if (cd->holdlevel > 0)
+    error("attempt to use the locator after dev.hold()");
+  
   info = g_new0(CairoLocator, 1);
   cd->locator = info;
     
@@ -1189,15 +1232,62 @@ static Rboolean Cairo_Locator(double *x, double *y, pDevDesc dd)
   return FALSE;
 }
 
+static void busy(CairoDesc *cd) {
+  if (cd->drawing) {
+    GdkCursor *cursor = gdk_cursor_new(GDK_WATCH);
+    gdk_window_set_cursor(cd->drawing->window, cursor);
+    gdk_cursor_unref(cursor);
+  }
+}
+
+static void idle(CairoDesc *cd) {
+  if (cd->drawing) {
+    GdkCursor *cursor = gdk_cursor_new(CURSOR);
+    gdk_window_set_cursor(cd->drawing->window, cursor);
+    gdk_cursor_unref(cursor);
+  }
+}
+
+static void update(CairoDesc *cd) {
+  if (cd->drawing) {
+    gtk_widget_queue_draw(cd->drawing);
+    gdk_window_process_updates(cd->drawing->window, TRUE);
+    gdk_flush();
+  }
+}
+
+static int Cairo_HoldFlush(pDevDesc dd, int level) {
+  CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
+  int prevHoldlevel = cd->holdlevel;
+
+  cd->holdlevel = MAX(cd->holdlevel + level, 0);
+  if (cd->holdlevel == 0) { /* hold released */
+    update(cd);
+    idle(cd);
+  } else if (prevHoldlevel == 0) { /* first hold, flush and go busy */
+    update(cd);
+    busy(cd);
+  }
+
+  return cd->holdlevel;
+}
+
+
 static void Cairo_Mode(gint mode, pDevDesc dd)
 {
   CairoDesc *cd = (CairoDesc *) dd->deviceSpecific;
-	
-  if (!mode && cd->drawing) {
-    gtk_widget_queue_draw(cd->drawing);
-    gdk_window_process_updates(cd->drawing->window,TRUE);
-    gdk_flush();
-    //R_gtk_eventHandler(NULL);
+
+  if (cd->holdlevel)
+    return;
+  
+  if (cd->drawing) {
+    if (!mode) {
+      update(cd);
+      idle(cd);
+      //R_gtk_eventHandler(NULL);
+    } else {
+      busy(cd);
+    }
   }
 }
 
@@ -1227,6 +1317,7 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
   dd->polyline = Cairo_Polyline;
   dd->polygon = Cairo_Polygon;
 #if R_GE_version > 6
+  dd->path = Cairo_Path;
   dd->raster = Cairo_Raster;
   dd->cap = Cairo_Cap;
 #endif
@@ -1242,7 +1333,18 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
   dd->wantSymbolUTF8 = TRUE;
   dd->strWidthUTF8 = Cairo_StrWidth;
   dd->textUTF8 = Cairo_Text;
+#if R_GE_version >= 9
+  dd->holdflush = Cairo_HoldFlush;
+#endif
 
+#if R_GE_version >= 9
+  dd->haveTransparency = 2;
+  dd->haveTransparentBg = 3;
+  dd->haveRaster = 2;
+  dd->haveCapture = cd->pixmap ? 2 : 1;
+  dd->haveLocator = cd->drawing ? 2 : 1;
+#endif
+  
   dd->left = 0;
   dd->right = width;
   dd->bottom = height;
