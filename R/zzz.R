@@ -1,8 +1,16 @@
 .onLoad <- function(libname, pkgname)
 {
-  dll <- try(library.dynam("cairoDevice", pkgname, libname))
+  if (.Platform$OS.type == "windows") {
+    dllpath <- file.path(.windows_gtk_path(), "bin")
+    dll <- try(library.dynam("cairoDevice", pkgname, libname,
+                             DLLpath = dllpath),
+               silent = getOption("verbose"))
+  }
+  else dll <- try(library.dynam("cairoDevice", pkgname, libname),
+                  silent = getOption("verbose"))
+  
   if (is.character(dll)) {
-    warning("Failed to load cairoDevice dynamic library:", dll)
+    warning("Failed to load cairoDevice, attempting to install it", dll)
     .install_system_dependencies()
     return()
   }
@@ -24,62 +32,74 @@
     }
 }
 
+.windows_gtk_path <- function()
+  file.path(system.file(package = "cairoDevice"), "gtk", .Platform$r_arch)
+
 .install_system_dependencies <- function()
 {
-  windows_config <- list(
-    source = F,
-    gtk_url = "http://downloads.sourceforge.net/gladewin32/gtk-2.12.9-win32-2.exe",
-    installer = function(path) {
-      shell(path)
-    }
-  )
+  windows32_config <-
+    list(
+         source = FALSE,
+         gtk_url = "http://ftp.gnome.org/pub/gnome/binaries/win32/gtk+/2.22/gtk+-bundle_2.22.1-20101227_win32.zip",
+         installer = function(path) {
+           gtk_path <- .windows_gtk_path()
+           ## unzip does this, but we want to see any warnings
+           dir.create(gtk_path, recursive = TRUE) 
+           unzip(path, exdir = gtk_path)
+         }
+         )
+
+  windows64_config <- windows32_config
+  windows64_config$gtk_url <- "http://ftp.gnome.org/pub/gnome/binaries/win64/gtk+/2.22/gtk+-bundle_2.22.1-20101229_win64.zip"
   
   darwin_config <- list(
-    source = F,
-    gtk_url = "http://r.research.att.com/gtk2-runtime.dmg", 
-    installer = function(path) {
-      system(paste("hdiutil attach ", path, sep=""))
-      system("open '/Volumes/GTK+ 2.10.11 run-time/gtk2-runtime.pkg'")
-      system("hdiutil detach '/Volumes/GTK+ 2.10.11 run-time'")
-    }
-  )
+                        source = FALSE,
+                        gtk_url = "http://r.research.att.com/libs/GTK_2.18.5-X11.pkg", 
+                        installer = function(path) {
+                          system(paste("open", path))
+                        }
+                        )
   
   unix_config <- NULL
   
   gtk_web <- "http://www.gtk.org"
   
   install_system_dep <- function(dep_name, dep_url, dep_web, installer)
-  {
-    if (!interactive()) {
-      cat("Please install ", dep_name, " from ", dep_url)
-      return()
+    {
+      if (!interactive()) {
+        message("Please install ", dep_name, " from ", dep_url)
+        return()
+      }
+      choice <- menu(paste(c("Install", "Do not install"), dep_name), T, 
+                     paste("Need", dep_name, "? (Restart R after installing)"))
+      if (choice == 1) {
+        path <- file.path(tempdir(), basename(sub("\\?.*", "", dep_url)))
+        if (download.file(dep_url, path, mode="wb") > 0)
+          stop("Failed to download ", dep_name)
+        installer(path)
+      }
+      message("Learn more about ", dep_name, " at ", dep_web)
     }
-    choice <- menu(paste(c("Install", "Do not install"), dep_name), T, 
-      paste("Need", dep_name, "?"))
-    if (choice == 1) {
-      path <- file.path(tempdir(), basename(dep_url))
-      if (download.file(dep_url, path, mode="wb") > 0)
-        stop("Failed to download ", dep_name)
-      installer(path)
-    }
-    message(paste("Learn more about", dep_name, "at", dep_web))
-  }
   
   install_all <- function() {
-    if (.Platform$OS.type == "windows")
-      config <- windows_config
-    else if (length(grep("darwin", R.version$platform))) 
+    if (.Platform$OS.type == "windows") {
+      if (.Platform$r_arch == "i386")
+        config <- windows32_config
+      else config <- windows64_config
+    } else if (length(grep("darwin", R.version$platform))) 
       config <- darwin_config
     else config <- unix_config
     
     if (is.null(config))
-      stop("Sorry this platform is not yet supported by the automatic GTK+ installer.",
-        "Please install GTK+ manually, if necessary. See: ", gtk_web)
+      stop("This platform is not yet supported by the automatic installer. ",
+           "Please install GTK+ manually, if necessary. See: ", gtk_web)
     
     install_system_dep("GTK+", config$gtk_url, gtk_web, config$installer)
   }
   
   install_all()
   
-  message("PLEASE RESTART R BEFORE TRYING TO LOAD THE PACKAGE AGAIN")
+  message("If the package still does not load, please ensure that GTK+ is",
+          " installed and that it is on your PATH environment variable")
+  message("IN ANY CASE, RESTART R BEFORE TRYING TO LOAD THE PACKAGE AGAIN")
 }
