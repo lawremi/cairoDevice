@@ -1,11 +1,10 @@
-.surfaces <- c("screen", "png", "pdf", "ps", "svg")
-
-Cairo <- function(width = 7, height = 7, pointsize = 10, surface = "screen", filename = NULL)
+Cairo <- function(width = 7, height = 7, pointsize = 8,
+                  surface = c("screen", "png", "pdf", "ps", "svg"),
+                  filename = NULL)
 {
   if (missing(surface) && !missing(filename))
     surface <- tolower(gsub(".*\\.", "", basename(filename)))
-  if (!(surface %in% .surfaces))
-    stop("Surface must be one of: ", paste(.surfaces, collapse=", "))
+  surface <- match.arg(surface)
   if (missing(filename) && surface != "screen")
     filename <- paste("Rplots", surface, sep=".")
   surface_info <- c(surface, filename)
