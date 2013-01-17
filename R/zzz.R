@@ -23,13 +23,19 @@
   deviceIsInteractive("Cairo")
 }
 
-.Last.lib <- function(libname, pkgname)
+closeDevices <- function()
 {
     devices <- dev.list()
     gtk.devices <- devices[names(devices)=="Cairo"]
     if(length(gtk.devices) > 0) {
         dev.off(gtk.devices)
     }
+}
+
+.onUnload <- function(libpath) {
+  closeDevices()
+  .C("cleanupGTK", PACKAGE = "cairoDevice")
+  library.dynam.unload("cairoDevice", libpath)
 }
 
 .windows_gtk_path <- function()

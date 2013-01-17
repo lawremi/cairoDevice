@@ -628,10 +628,7 @@ static void setLineType(cairo_t *cr, const pGEcontext gc)
   cairo_line_join_t join = CAIRO_LINE_JOIN_ROUND;
   static double dashes[8];
   gint i;
-	
-  if(gc->lwd < 1)
-    gc->lwd=1;
-	
+  
   cairo_set_line_width(cr, gc->lwd);
 	
   switch(gc->lend) {
