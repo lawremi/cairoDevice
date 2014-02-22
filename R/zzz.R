@@ -17,13 +17,13 @@
   
   #library.dynam("cairoDevice", pkgname, libname)
   if (!.C("loadGTK", success = logical(1), PACKAGE="cairoDevice")$success)
-    message("Note: R session is headless; Cairo device not initialized")
+    packageStartupMessage("Note: R session is headless; Cairo device not initialized")
 
   # register device as being interactive
   deviceIsInteractive("Cairo")
 }
 
-closeDevices <- function()
+.closeDevices <- function()
 {
     devices <- dev.list()
     gtk.devices <- devices[names(devices)=="Cairo"]
@@ -33,7 +33,7 @@ closeDevices <- function()
 }
 
 .onUnload <- function(libpath) {
-  closeDevices()
+  .closeDevices()
   .C("cleanupGTK", PACKAGE = "cairoDevice")
   library.dynam.unload("cairoDevice", libpath)
 }
