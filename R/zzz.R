@@ -16,8 +16,7 @@
   }
   
   #library.dynam("cairoDevice", pkgname, libname)
-  if (!.C("loadGTK", success = logical(1), PACKAGE="cairoDevice")$success)
-    packageStartupMessage("Note: R session is headless; Cairo device not initialized")
+  .C("loadGTK", success = logical(1), PACKAGE="cairoDevice")
 
   # register device as being interactive
   deviceIsInteractive("Cairo")
