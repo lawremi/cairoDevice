@@ -7,12 +7,12 @@
 \title{The Cairo Graphics Device}
 \description{Open an R graphics device based on the Cairo vector graphics library}
 \usage{
-  Cairo(width = 7, height = 7, pointsize = 8,
+  Cairo(width = 7, height = 7, pointsize = 12,
         surface = c("screen", "png", "pdf", "ps", "svg"), filename = NULL)
-  Cairo_pdf(filename, width = 7, height = 7, pointsize = 10)
-  Cairo_ps(filename, width = 7, height = 7, pointsize = 10)
-  Cairo_svg(filename, width = 7, height = 7, pointsize = 10)
-  Cairo_png(filename, width = 7, height = 7, pointsize = 10)
+  Cairo_pdf(filename, width = 7, height = 7, pointsize = 12)
+  Cairo_ps(filename, width = 7, height = 7, pointsize = 12)
+  Cairo_svg(filename, width = 7, height = 7, pointsize = 12)
+  Cairo_png(filename, width = 7, height = 7, pointsize = 12)
 }
 \arguments{
   \item{width}{The (initial) width in inches}

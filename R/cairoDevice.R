@@ -1,4 +1,4 @@
-Cairo <- function(width = 7, height = 7, pointsize = 8,
+Cairo <- function(width = 7, height = 7, pointsize = 12,
                   surface = c("screen", "png", "pdf", "ps", "svg"),
                   filename = NULL)
 {
@@ -13,24 +13,24 @@ Cairo <- function(width = 7, height = 7, pointsize = 8,
   return(invisible(TRUE))
 }
 
-Cairo_png <- function(filename, width = 7, height = 7, pointsize = 10)
+Cairo_png <- function(filename, width = 7, height = 7, pointsize = 12)
 {
   Cairo(width, height, pointsize, "png", filename)
 }
-Cairo_pdf <- function(filename, width = 7, height = 7, pointsize = 10)
+Cairo_pdf <- function(filename, width = 7, height = 7, pointsize = 12)
 {
   Cairo(width, height, pointsize, "pdf", filename)
 }
-Cairo_ps <- function(filename, width = 7, height = 7, pointsize = 10)
+Cairo_ps <- function(filename, width = 7, height = 7, pointsize = 12)
 {
   Cairo(width, height, pointsize, "ps", filename)
 }
-Cairo_svg <- function(filename, width = 7, height = 7, pointsize = 10)
+Cairo_svg <- function(filename, width = 7, height = 7, pointsize = 12)
 {
   Cairo(width, height, pointsize, "svg", filename)
 }
 
-asCairoDevice <- function(widget, pointsize = 10, width = 500, height = 500)
+asCairoDevice <- function(widget, pointsize = 12, width = 500, height = 500)
 {
   w <- -1
   h <- -1
