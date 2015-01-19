@@ -6,7 +6,7 @@
   (like a \code{\link[RGtk2]{GdkPixmap}}), a \code{GtkPrintContext} or a
   \code{Cairo} context to a Cairo graphics device, so that R plot
   commands draw to the given target.}
-\usage{asCairoDevice(widget, pointsize = 10, width = 500, height = 500)}
+\usage{asCairoDevice(widget, pointsize = 12, width = 500, height = 500)}
 \arguments{
 \item{widget}{The \code{GtkWidget}, \code{GdkDrawable},
   \code{GtkPrintContext}, or \code{Cairo} context, to which the R
