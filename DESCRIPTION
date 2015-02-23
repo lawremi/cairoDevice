@@ -1,5 +1,5 @@
 Package: cairoDevice
-Version: 2.21
+Version: 2.22
 Title: Cairo-based Graphics Device Driver
 Author: Michael Lawrence
 Depends: R (>= 2.12.0)
