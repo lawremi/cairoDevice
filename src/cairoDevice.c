@@ -669,14 +669,20 @@ static void setLineType(cairo_t *cr, const pGEcontext gc)
 
 static void drawShape(cairo_t *cr, const pGEcontext gc)
 {
-  if (R_ALPHA(gc->fill) > 0) {
+  gboolean stroke = R_ALPHA(gc->col) > 0 && gc->lty != -1;
+  gboolean fill = R_ALPHA(gc->fill) > 0;
+  if (fill) {
     cairo_antialias_t antialias = cairo_get_antialias(cr);
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_NONE);
     setColor(cr, gc->fill);
-    cairo_fill_preserve(cr);
+    if (stroke) {
+      cairo_fill_preserve(cr);
+    } else {
+      cairo_fill(cr);
+    }
     cairo_set_antialias(cr, antialias);
   }
-  if (R_ALPHA(gc->col) > 0 && gc->lty != -1) {
+  if (stroke) {
     setColor(cr, gc->col);
     setLineType(cr, gc);
     cairo_stroke(cr);
