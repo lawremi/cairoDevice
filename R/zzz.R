@@ -50,7 +50,7 @@
            gtk_path <- .windows_gtk_path()
            ## unzip does this, but we want to see any warnings
            dir.create(gtk_path, recursive = TRUE) 
-           unzip(path, exdir = gtk_path)
+           utils::unzip(path, exdir = gtk_path)
          }
          )
 
@@ -75,11 +75,12 @@
         message("Please install ", dep_name, " from ", dep_url)
         return()
       }
-      choice <- menu(paste(c("Install", "Do not install"), dep_name), T, 
-                     paste("Need", dep_name, "? (Restart R after installing)"))
+      choice <- utils::menu(paste(c("Install", "Do not install"), dep_name), T, 
+                            paste("Need", dep_name,
+                                  "? (Restart R after installing)"))
       if (choice == 1) {
         path <- file.path(tempdir(), basename(sub("\\?.*", "", dep_url)))
-        if (download.file(dep_url, path, mode="wb") > 0)
+        if (utils::download.file(dep_url, path, mode="wb") > 0)
           stop("Failed to download ", dep_name)
         installer(path)
       }
