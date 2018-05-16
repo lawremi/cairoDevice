@@ -4,7 +4,13 @@
 #include <windows.h>
 #else
 #include "R_ext/eventloop.h"
+#ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
+#endif
+#include <unistd.h>
+#include <stdint.h>
+#define CSTACK_DEFNS
+#include <Rinterface.h>
 #endif
 
 void
@@ -37,12 +43,58 @@ VOID CALLBACK R_gtk_timer_proc(HWND hwnd, UINT uMsg, UINT_PTR idEvent,
 }
 #else
 static InputHandler *eventLoopInputHandler = NULL;
+static GThread *eventLoopThread = NULL;
+static GMainLoop *eventLoopMain = NULL;
+static int fired = 0;
+static int ifd, ofd;
+
+gboolean R_gtk_timerFunc(gpointer data) {
+    if (!fired) {
+	gchar buf[16];
+	fired = 1;
+	*buf = 0;
+	//Rprintf("Timer firing\n");
+	if (!write(ofd, buf, 1)) {
+	    g_critical("Timer failed to write to pipe; disabling timer");
+	    return FALSE;
+	}
+    }
+    return TRUE;
+}
+
+gpointer R_gtk_timerThreadFunc(gpointer data) {
+    GMainContext *ctx = g_main_context_new();
+    eventLoopMain = g_main_loop_new(ctx, FALSE);
+    GSource *timeout = g_timeout_source_new(100);
+    //g_timeout_add(100, R_gtk_timerFunc, NULL);
+    g_source_set_callback(timeout, R_gtk_timerFunc, NULL, NULL);
+    g_source_attach(timeout, ctx);
+    g_main_loop_run(eventLoopMain);
+    g_source_destroy(timeout);
+    g_main_loop_unref(eventLoopMain);
+    g_main_context_unref(ctx);
+    return 0;
+}
+
+void R_gtk_timerInputHandler(void *userData) {
+    gchar buf[16];
+    //Rprintf("Input handler hit\n");
+    if (!read(ifd, buf, 16))
+	g_critical("Input handler failed to read from pipe");
+    //Rprintf("Handling events\n");
+    R_gtk_eventHandler(NULL);
+    //Rprintf("Events handled\n");
+    fired = 0;
+}
 #endif
 
 void
 R_gtk_setEventHandler()
 {
+  int fds[2];
+
 #ifndef WIN32
+#ifdef GDK_WINDOWING_X11
   if(!eventLoopInputHandler)
     {
       if (!GDK_DISPLAY())
@@ -51,6 +103,26 @@ R_gtk_setEventHandler()
                                               ConnectionNumber(GDK_DISPLAY()),
                                               R_gtk_eventHandler, -1);
     }
+#endif
+#ifdef G_THREADS_ENABLED
+#ifndef __FreeBSD__
+  if (!pipe(fds)) {
+      ifd = fds[0];
+      ofd = fds[1];
+      eventLoopInputHandler = addInputHandler(R_InputHandlers, ifd,
+                                              R_gtk_timerInputHandler, 32);
+#if GLIB_CHECK_VERSION(2,32,0)
+      eventLoopThread = g_thread_new("RGtk2", R_gtk_timerThreadFunc, NULL);
+#else
+      if (!g_thread_supported ()) g_thread_init (NULL);
+      eventLoopThread = g_thread_create(R_gtk_timerThreadFunc, NULL, TRUE,
+                                        NULL);
+#endif
+      R_CStackLimit = -1;
+  } else g_warning("Failed to establish pipe; "
+		   "disabling timer-based event handling");
+#endif
+#endif
 #else
   /* Create a dummy window for receiving messages */
   LPCTSTR class = "cairoDevice";
