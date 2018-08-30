@@ -157,6 +157,10 @@ void loadGTK(int *success)
 void cleanupGTK() {
 #ifndef G_OS_WIN32
   removeInputHandler(&R_InputHandlers, eventLoopInputHandler);
+  g_main_loop_quit(eventLoopMain);
+  g_thread_join(eventLoopThread);
+  close(ifd);
+  close(ofd);
 #else
   DestroyWindow(win);
 #endif
