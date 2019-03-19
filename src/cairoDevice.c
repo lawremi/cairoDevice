@@ -1126,14 +1126,14 @@ static void drawText(double x, double y, const char *str,
 		     double rot, double hadj, CairoDesc *cd, const pGEcontext gc)
 {
   PangoLayout *layout;
-  gint ascent, lbearing;
+  gint ascent, lbearing, width;
   cairo_t *cr = cd->cr;
 
   PangoFontDescription *desc = getFont(cd, gc);
 
   layout = layoutText(desc, str, cd);
   
-  text_extents(desc, cd, gc, str, &lbearing, NULL, NULL, &ascent, NULL, FALSE);
+  text_extents(desc, cd, gc, str, &lbearing, NULL, &width, &ascent, NULL, FALSE);
 
   cairo_move_to(cr, x, y);
   cairo_rotate(cr, -1*rot);
