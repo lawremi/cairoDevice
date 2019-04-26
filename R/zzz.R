@@ -26,8 +26,8 @@
 {
     devices <- dev.list()
     gtk.devices <- devices[names(devices)=="Cairo"]
-    if(length(gtk.devices) > 0) {
-        dev.off(gtk.devices)
+    for (dev in gtk.devices) {
+        dev.off(dev)
     }
 }
 
