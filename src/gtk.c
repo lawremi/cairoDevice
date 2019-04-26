@@ -42,7 +42,7 @@ VOID CALLBACK R_gtk_timer_proc(HWND hwnd, UINT uMsg, UINT_PTR idEvent,
   R_gtk_eventHandler(NULL);
 }
 #else
-static InputHandler *eventLoopInputHandler = NULL;
+static InputHandler *eventLoopInputHandler = NULL, *displayInputHandler = NULL;
 static GThread *eventLoopThread = NULL;
 static GMainLoop *eventLoopMain = NULL;
 static int fired = 0;
@@ -88,21 +88,19 @@ void R_gtk_timerInputHandler(void *userData) {
 }
 #endif
 
-void
+Rboolean
 R_gtk_setEventHandler()
 {
   int fds[2];
 
 #ifndef WIN32
 #ifdef GDK_WINDOWING_X11
-  if(!eventLoopInputHandler)
-    {
-      if (!GDK_DISPLAY())
-        error("GDK display not found - please make sure X11 is running");
-      eventLoopInputHandler = addInputHandler(R_InputHandlers,
-                                              ConnectionNumber(GDK_DISPLAY()),
-                                              R_gtk_eventHandler, -1);
-    }
+  if (!GDK_DISPLAY()) {
+      return FALSE;
+  }
+  displayInputHandler = addInputHandler(R_InputHandlers,
+					ConnectionNumber(GDK_DISPLAY()),
+					R_gtk_eventHandler, -1);
 #endif
 #ifdef G_THREADS_ENABLED
 #ifndef __FreeBSD__
@@ -135,6 +133,7 @@ R_gtk_setEventHandler()
   
   SetTimer(win, CD_TIMER_ID, CD_TIMER_DELAY, (TIMERPROC)R_gtk_timer_proc);
 #endif
+  return TRUE;
 }
 
 /* Initialize GTK+ if not already initialized */
@@ -149,14 +148,18 @@ void loadGTK(int *success)
       gtk_disable_setlocale();
       *success = gtk_init_check(&argc, &argv);
     }
-    R_gtk_setEventHandler();
+    if (success) {
+	*success = R_gtk_setEventHandler();
+    }
     g_free(argv[0]);
     g_free(argv);
 }
 
 void cleanupGTK() {
 #ifndef G_OS_WIN32
+  R_gtk_eventHandler(NULL);
   removeInputHandler(&R_InputHandlers, eventLoopInputHandler);
+  removeInputHandler(&R_InputHandlers, displayInputHandler);
   g_main_loop_quit(eventLoopMain);
   g_thread_join(eventLoopThread);
   close(ifd);
