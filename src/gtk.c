@@ -34,7 +34,7 @@ R_gtk_eventHandler(void *userData)
 #define CD_TIMER_ID 0
 #define CD_TIMER_DELAY 50
 
-static HWND win;
+static HWND win = NULL;
 
 VOID CALLBACK R_gtk_timer_proc(HWND hwnd, UINT uMsg, UINT_PTR idEvent,
                                DWORD dwTime)
@@ -160,11 +160,15 @@ void cleanupGTK() {
   R_gtk_eventHandler(NULL);
   removeInputHandler(&R_InputHandlers, eventLoopInputHandler);
   removeInputHandler(&R_InputHandlers, displayInputHandler);
-  g_main_loop_quit(eventLoopMain);
-  g_thread_join(eventLoopThread);
-  close(ifd);
-  close(ofd);
+  if (eventLoopMain) {
+      g_main_loop_quit(eventLoopMain);
+      g_thread_join(eventLoopThread);
+      close(ifd);
+      close(ofd);
+  }
 #else
-  DestroyWindow(win);
+  if (win) {
+      DestroyWindow(win);
+  }
 #endif
 }
