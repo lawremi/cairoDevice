@@ -41,7 +41,6 @@
 
 \author{Michael Lawrence}
 \references{
-\url{http://www.ggobi.org/rgtk2}
 \url{http://www.gtk.org/}
 \url{http://www.cairographics.org/}
 }
