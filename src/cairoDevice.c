@@ -1297,6 +1297,24 @@ static void Cairo_Mode(gint mode, pDevDesc dd)
   }
 }
 
+static SEXP Cairo_setPattern(SEXP pattern, pDevDesc dd) {
+    return R_NilValue;
+}
+
+static void Cairo_releasePattern(SEXP ref, pDevDesc dd) {} 
+
+static SEXP Cairo_setClipPath(SEXP path, SEXP ref, pDevDesc dd) {
+    return R_NilValue;
+}
+
+static void Cairo_releaseClipPath(SEXP ref, pDevDesc dd) {}
+
+static SEXP Cairo_setMask(SEXP path, SEXP ref, pDevDesc dd) {
+    return R_NilValue;
+}
+
+static void Cairo_releaseMask(SEXP ref, pDevDesc dd) {}
+
 Rboolean
 configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, double ps)
 {
@@ -1350,7 +1368,16 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
   dd->haveCapture = cd->pixmap ? 2 : 1;
   dd->haveLocator = cd->drawing ? 2 : 1;
 #endif
-  
+
+#if R_GE_version >= 13
+  dd->setPattern      = Cairo_setPattern;
+  dd->releasePattern  = Cairo_releasePattern;
+  dd->setClipPath     = Cairo_setClipPath;
+  dd->releaseClipPath = Cairo_releaseClipPath;
+  dd->setMask         = Cairo_setMask;
+  dd->releaseMask     = Cairo_releaseMask;
+#endif
+
   dd->left = 0;
   dd->right = width;
   dd->bottom = height;
@@ -1404,7 +1431,11 @@ configureCairoDevice(pDevDesc dd, CairoDesc *cd, double width, double height, do
     if (cd->window)
       dd->canGenKeybd = TRUE;     /* can the device generate keyboard events */
   }
-    
+
+#if R_GE_version >= 13
+  dd->deviceVersion = R_GE_definitions;
+#endif
+
   dd->displayListOn = TRUE;
 	
   /* finish */
