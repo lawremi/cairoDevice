@@ -1,5 +1,5 @@
 Package: cairoDevice
-Version: 2.30
+Version: 2.31
 Title: Embeddable Cairo Graphics Device Driver
 Author: Michael Lawrence
 Depends: R (>= 4.1.0)
