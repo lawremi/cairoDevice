@@ -1503,7 +1503,7 @@ initCairoDevice(double width, double height, double ps, void *data, CairoDeviceC
       return NULL;
     if (! init_fun (dev, width, height, ps, data)) {
       free(dev);
-      PROBLEM  "unable to start device cairo" ERROR;
+      Rf_error("unable to start device cairo");
     }
     cd = (CairoDesc *)dev->deviceSpecific;
     /* wait to do this until the device is realized (if applicable) */
@@ -1529,7 +1529,7 @@ do_Cairo(double *in_width, double *in_height, double *in_pointsize, char **surfa
   width = *in_width;
   height = *in_height;
   if (width <= 0 || height <= 0) {
-    PROBLEM "Cairo device: invalid width or height" ERROR;
+    Rf_error("Cairo device: invalid width or height");
   }
   ps = *in_pointsize;
  
