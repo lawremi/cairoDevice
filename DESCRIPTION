@@ -5,7 +5,7 @@ Author: Michael Lawrence
 Depends: R (>= 4.1.0)
 Imports: grDevices
 SystemRequirements: cairo (>= 1.0)
-Maintainer: Michael Lawrence <michafla@gene.com>
+Maintainer: Michael Lawrence <lawremi@gmail.com>
 Description: This device uses Cairo and GTK to draw to the screen,
         file (png, svg, pdf, and ps) or memory (arbitrary GdkDrawable
         or Cairo context). The screen device may be embedded into RGtk2
